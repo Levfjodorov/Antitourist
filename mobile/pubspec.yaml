@@ -1,6 +1,6 @@
 name: antitourist
 publish_to: 'none'
-version: 0.1.1+2
+version: 0.2.0+3
 
 environment:
   sdk: '>=3.6.0 <4.0.0'
@@ -11,6 +11,8 @@ dependencies:
   http: ^1.5.0
   flutter_map: ^8.3.2
   latlong2: ^0.9.1
+  geolocator: ^14.1.1
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

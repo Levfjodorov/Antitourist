@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a testing APK from a generated, isolated Flutter Android project."""
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -16,14 +17,43 @@ def patch_manifest(path: Path) -> None:
     tree = ET.parse(path)
     root = tree.getroot()
     name = '{' + namespace + '}name'
-    if not any(p.get(name) == 'android.permission.INTERNET'
-               for p in root.findall('uses-permission')):
-        root.insert(0, ET.Element('uses-permission', {name: 'android.permission.INTERNET'}))
+    permissions = ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']
+    existing = {p.get(name) for p in root.findall('uses-permission')}
+    for permission in permissions:
+        full_name = 'android.permission.' + permission
+        if full_name not in existing:
+            root.insert(0, ET.Element('uses-permission', {name: full_name}))
     application = root.find('application')
     if application is None:
         raise RuntimeError('Generated Android manifest has no application element')
     application.set('{' + namespace + '}label', 'AntiTourist')
     tree.write(path, encoding='utf-8', xml_declaration=True)
+
+
+def patch_min_sdk(app: Path) -> None:
+    """url_launcher requires Android 7.0; retain higher Flutter defaults."""
+    kotlin = app / 'build.gradle.kts'
+    groovy = app / 'build.gradle'
+    if kotlin.is_file():
+        text = kotlin.read_text(encoding='utf-8')
+        text = text.replace('minSdk = flutter.minSdkVersion',
+                            'minSdk = maxOf(flutter.minSdkVersion, 24)')
+        kotlin.write_text(text, encoding='utf-8')
+    elif groovy.is_file():
+        text = groovy.read_text(encoding='utf-8')
+        text = text.replace('minSdkVersion flutter.minSdkVersion',
+                            'minSdkVersion Math.max(flutter.minSdkVersion, 24)')
+        groovy.write_text(text, encoding='utf-8')
+    else:
+        raise RuntimeError('Generated Android project has no Gradle app configuration')
+
+
+def apk_filename(pubspec: Path) -> str:
+    match = re.search(r'^version:\s*(\d+\.\d+\.\d+)(?:\+\d+)?\s*$',
+                      pubspec.read_text(encoding='utf-8'), re.MULTILINE)
+    if match is None:
+        raise RuntimeError('mobile/pubspec.yaml has no supported version')
+    return 'AntiTourist-' + match.group(1) + '-test.apk'
 
 
 def run(flutter: str, arguments: list[str], cwd: Path) -> None:
@@ -57,6 +87,7 @@ def main() -> int:
         shutil.copytree(ROOT / 'mobile' / folder, target)
     shutil.copy2(ROOT / 'mobile' / 'pubspec.yaml', build / 'pubspec.yaml')
     patch_manifest(build / 'android' / 'app' / 'src' / 'main' / 'AndroidManifest.xml')
+    patch_min_sdk(build / 'android' / 'app')
     if args.prepare_only:
         print('Prepared: ' + str(build))
         return 0
@@ -69,7 +100,7 @@ def main() -> int:
         raise RuntimeError('Flutter did not produce the expected APK')
     output = ROOT / 'dist'
     output.mkdir(exist_ok=True)
-    destination = output / 'AntiTourist-0.1.1-test.apk'
+    destination = output / apk_filename(ROOT / 'mobile' / 'pubspec.yaml')
     shutil.copy2(apk, destination)
     # Keep the exact Flutter version and lockfile for reproduction of this build.
     version = subprocess.check_output(
