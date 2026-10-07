@@ -34,6 +34,12 @@ class AppStrings {
   String minutes(int value) => value < 60 ? t('minutes', {'value': value})
       : t('hoursMinutes', {'hours': value ~/ 60, 'minutes': value % 60});
 
+  String openingHours(String value) {
+    if (value == '24/7') { return t('alwaysOpenHours'); }
+    return value.replaceAllMapped(RegExp(r'\b(Mo|Tu|We|Th|Fr|Sa|Su|PH|off)\b'),
+      (m) => t('day_${m[0]}'));
+  }
+
   String error(String original) {
     if (original.startsWith('Сервис карт вернул HTTP ')) { return t('errMapService'); }
     if (original.startsWith('Сервис маршрутов вернул HTTP ')) { return t('errRouteService'); }
@@ -60,7 +66,7 @@ class AppStrings {
       return place.localizedDescriptions[language.code] ?? place.description;
     }
     final lines = <String>[category(place.category)];
-    for (final key in ['historic', 'artwork_type', 'start_date', 'artist_name', 'cuisine', 'opening_hours']) {
+    for (final key in ['historic', 'artwork_type', 'start_date', 'artist_name', 'cuisine']) {
       final value = _tag(place.tags, key);
       if (value == null) { continue; }
       final valueKey = 'value_$value';

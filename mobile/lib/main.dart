@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'external_links.dart';
+import 'app_store.dart';
+import 'my_places_screen.dart';
 import 'language_settings.dart';
 import 'osm.dart';
 import 'overpass.dart';
@@ -15,25 +17,28 @@ import 'route_map.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await LanguageSettings.load();
-  runApp(AntiTouristApp(settings: settings));
+  final store = await AppStore.load();
+  runApp(AntiTouristApp(settings: settings, store: store));
 }
 
 class AntiTouristApp extends StatefulWidget {
-  const AntiTouristApp({super.key, this.settings});
+  const AntiTouristApp({super.key, this.settings, this.store});
   final LanguageSettings? settings;
+  final AppStore? store;
   @override
   State<AntiTouristApp> createState() => _AntiTouristAppState();
 }
 
 class _AntiTouristAppState extends State<AntiTouristApp> {
   late final LanguageSettings settings;
+  late final AppStore store;
   @override
-  void initState() { super.initState(); settings = widget.settings ?? LanguageSettings(); }
+  void initState() { super.initState(); settings = widget.settings ?? LanguageSettings(); store = widget.store ?? AppStore(); }
   @override
-  void dispose() { if (widget.settings == null) { settings.dispose(); } super.dispose(); }
+  void dispose() { if (widget.settings == null) { settings.dispose(); } if (widget.store == null) { store.dispose(); } super.dispose(); }
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: settings,
-    builder: (_, child) => LanguageScope(settings: settings, child: MaterialApp(
+    builder: (_, child) => LanguageScope(settings: settings, child: AppStoreScope(store: store, child: MaterialApp(
       debugShowCheckedModeBanner: false, title: 'AntiTourist',
       locale: Locale(settings.language.code),
       supportedLocales: const [Locale('ru'), Locale('et'), Locale('en')],
@@ -41,7 +46,7 @@ class _AntiTouristAppState extends State<AntiTouristApp> {
       theme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
         colorSchemeSeed: const Color(0xffb5f36a),
         scaffoldBackgroundColor: const Color(0xff111711)),
-      home: const HomeScreen())));
+      home: const HomeScreen()))));
 }
 
 class HomeScreen extends StatefulWidget {
@@ -119,16 +124,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final origin = requestedDemo ? tallinnStart : start;
     try {
       final List<Place> selected;
+      final List<Place> pool;
       var candidateCount = 0;
       if (requestedDemo) {
         final raw = jsonDecode(await rootBundle.loadString('assets/demo_places.json')) as List<dynamic>;
-        selected = selectDemoPlaces(
-          raw.map((item) => Place.fromJson(item as Map<String, dynamic>)).toList(),
+        pool = raw.map((item) => Place.fromJson(item as Map<String, dynamic>)).toList();
+        selected = selectDemoPlaces(pool,
           minutes: (hours * 60).round(), wildness: wildness.round(), interests: interests);
       } else {
         final radius = (radiusKm * 1000).round();
         final candidates = await service.search(origin, radius, Set.of(interests));
         candidateCount = candidates.length;
+        pool = candidates.where((p) => interests.contains(p.category) &&
+          (!onlyPublic || p.legalAccess)).take(500).toList();
         selected = rankLivePlaces(candidates, start: origin, radius: radius,
           minutes: (hours * 60).round(), wildness: wildness.round(),
           interests: interests, onlyPublicAccess: onlyPublic);
@@ -140,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (!mounted) { return; }
       await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => ResultsScreen(
-        places: selected, demo: requestedDemo, start: origin, candidateCount: candidateCount, requestedMinutes: (hours * 60).round())));
+        places: selected, candidates: pool, demo: requestedDemo, start: origin, candidateCount: candidateCount, requestedMinutes: (hours * 60).round())));
     } on SearchFailure catch (e) {
       if (mounted) { setState(() => error = e.message); }
     } catch (_) {
@@ -152,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.4.1')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.5.0')),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       Align(alignment: Alignment.centerLeft, child: Image.asset(
         'assets/branding/logo_foreground.png', width: 112, height: 112,
@@ -163,6 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 12),
       Text(tr(context, 'intro')),
       const SizedBox(height: 20),
+      const StorageNotice(),
+      if (AppStoreScope.of(context)?.active case final active?)
+        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr(context, 'resumeHint')),
+            Text(context.strings.name(active.places.first)),
+            FilledButton.icon(onPressed: () => openSavedWalk(context, active),
+              icon: const Icon(Icons.directions_walk), label: Text(tr(context, 'continueWalk'))),
+          ]))),
+      OutlinedButton.icon(onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => const MyPlacesScreen())), icon: const Icon(Icons.bookmarks_outlined),
+        label: Text(tr(context, 'myPlaces'))),
+      const SizedBox(height: 12),
       Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(tr(context, startLabel, {'distance': accuracyMeters ?? 0}), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),

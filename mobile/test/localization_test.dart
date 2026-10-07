@@ -36,6 +36,9 @@ void main() {
       }
     }
     expect(const AppStrings(AppLanguage.et).distance(1250), '1.3 km');
+    expect(const AppStrings(AppLanguage.ru).openingHours('Mo-Fr 09:00-17:00'), 'пн-пт 09:00-17:00');
+    expect(const AppStrings(AppLanguage.et).openingHours('Mo-Fr 09:00-17:00'), 'E-R 09:00-17:00');
+    expect(const AppStrings(AppLanguage.en).openingHours('24/7'), '24 hours a day');
     expect(const AppStrings(AppLanguage.en).minutes(90), '1 h 30 min');
     expect(const AppStrings(AppLanguage.ru).minutes(90), '1 ч 30 мин');
   });

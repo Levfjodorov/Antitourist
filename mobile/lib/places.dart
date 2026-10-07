@@ -45,6 +45,18 @@ class Place {
   final Map<String, String> localizedNames, localizedDescriptions, localizedSafetyNotes;
   GeoPoint get point => GeoPoint(lat, lon);
 
+  String get key => id.isNotEmpty ? id : '$lat,$lon:$name';
+
+  Map<String, dynamic> toJson() => {
+    'name': name, 'category': category, 'lat': lat, 'lon': lon,
+    'description': description, 'anti_tourist_score': score,
+    'legal_access': legalAccess, 'id': id, 'safety_note': safetyNote,
+    'names': localizedNames, 'descriptions': localizedDescriptions,
+    'safety_notes': localizedSafetyNotes, 'tags': tags,
+    'osm_url': osmUrl?.toString(), 'distance': distance,
+    'center': coordinateIsCenter, 'access_label': accessLabel,
+  };
+
   factory Place.fromJson(Map<String, dynamic> json) {
     final lat = (json['lat'] as num).toDouble();
     final lon = (json['lon'] as num).toDouble();
@@ -56,6 +68,11 @@ class Place {
       category: json['category'] as String, lat: lat, lon: lon,
       description: json['description'] as String, score: score,
       legalAccess: json['legal_access'] == true,
+      osmUrl: json['osm_url'] == null ? null : Uri.parse(json['osm_url'] as String),
+      distance: (json['distance'] as num? ?? 0).toDouble(),
+      coordinateIsCenter: json['center'] == true,
+      accessLabel: json['access_label'] as String? ?? 'Доступ не указан',
+      tags: Map<String, String>.from(json['tags'] as Map? ?? const {}),
       id: json['id'] as String? ?? '', safetyNote: json['safety_note'] as String?,
       localizedNames: Map<String, String>.from(json['names'] as Map? ?? const {}),
       localizedDescriptions: Map<String, String>.from(json['descriptions'] as Map? ?? const {}),

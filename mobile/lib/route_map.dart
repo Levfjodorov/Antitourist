@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'external_links.dart';
+import 'place_details_screen.dart';
+import 'place_card.dart';
 import 'language_settings.dart';
 import 'places.dart';
 import 'walking_route.dart';
@@ -62,6 +64,14 @@ class RouteMap extends StatelessWidget {
                         if (places[i].coordinateIsCenter)
                           Text(tr(context, 'markerCenter')),
                         if (places[i].safetyNote != null) Text(context.strings.safety(places[i])!),
+                        Wrap(spacing: 8, children: [
+                          FavoriteButton(place: places[i]),
+                          TextButton.icon(onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                            Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
+                              PlaceDetailsScreen(place: places[i], demo: demo)));
+                          }, icon: const Icon(Icons.info_outline), label: Text(tr(context, 'placeDetails'))),
+                        ]),
                         if (places[i].osmUrl != null)
                           TextButton(onPressed: () => openExternal(sheetContext, places[i].osmUrl!),
                             child: Text(tr(context, 'source'))),
