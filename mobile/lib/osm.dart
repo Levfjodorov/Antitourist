@@ -1,11 +1,11 @@
 import 'places.dart';
 
 const _selectors = <String, List<String>>{
-  'history': ['[historic~"^(memorial|monument|ruins|archaeological_site|boundary_stone)$"]'],
-  'weird': ['[tourism=artwork]'],
-  'views': ['[tourism=viewpoint]'],
-  'food': ['[amenity~"^(cafe|restaurant)$"]'],
-  'industrial': ['[historic~"^(bunker|industrial)$"]', '[man_made~"^(crane|water_tower)$"]'],
+  'history': [r'[historic~"^(memorial|monument|ruins|archaeological_site|boundary_stone)$"]'],
+  'weird': [r'[tourism=artwork]'],
+  'views': [r'[tourism=viewpoint]'],
+  'food': [r'[amenity~"^(cafe|restaurant)$"]'],
+  'industrial': [r'[historic~"^(bunker|industrial)$"]', r'[man_made~"^(crane|water_tower)$"]'],
 };
 
 String buildOverpassQuery(GeoPoint start, int radius, Set<String> interests) {
