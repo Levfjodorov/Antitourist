@@ -19,7 +19,7 @@ void main() {
     await tester.tap(find.text('Построить пеший маршрут'));
     await tester.pumpAndSettle();
     expect(calls, 1);
-    expect(find.textContaining('HTTP 503'), findsOneWidget);
+    expect(find.text('Сервис маршрутов временно недоступен. Попробуй позже.'), findsOneWidget);
     expect(find.text('Построить пеший маршрут'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('1. Первое место'), 150);
     expect(find.text('1. Первое место'), findsOneWidget);

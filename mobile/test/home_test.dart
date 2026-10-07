@@ -9,26 +9,28 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(const AntiTouristApp());
+    await tester.pumpAndSettle();
     expect(find.text('Центр Таллинна'), findsOneWidget);
-    expect(find.text('Моя геопозиция'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Демонстрационный режим'), 250);
+    expect(find.text('Где я сейчас'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Попробовать на примере'), 250);
     final switches = tester.widgetList<SwitchListTile>(find.byType(SwitchListTile));
     expect(switches.every((s) => !s.value), isTrue);
-    await tester.scrollUntilVisible(find.text('УДИВИ МЕНЯ'), 250);
-    expect(find.text('УДИВИ МЕНЯ'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Удиви меня'), 250);
+    expect(find.text('Удиви меня'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('Demo opens fictional results without using live search', (tester) async {
     await tester.pumpWidget(const AntiTouristApp());
-    await tester.scrollUntilVisible(find.text('Демонстрационный режим'), 250);
-    await tester.tap(find.text('Демонстрационный режим'));
-    await tester.pump();
-    await tester.scrollUntilVisible(find.text('УДИВИ МЕНЯ'), 250);
-    await tester.tap(find.text('УДИВИ МЕНЯ'));
     await tester.pumpAndSettle();
-    expect(find.text('Твоя подборка'), findsOneWidget);
-    expect(find.text('ДЕМО · Все точки вымышленные.'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Попробовать на примере'), 250);
+    await tester.tap(find.text('Попробовать на примере'));
+    await tester.pump();
+    await tester.scrollUntilVisible(find.text('Удиви меня'), 250);
+    await tester.tap(find.text('Удиви меня'));
+    await tester.pumpAndSettle();
+    expect(find.text('Места для прогулки'), findsOneWidget);
+    expect(find.text('Пример · Места вымышленные, идти к ним не нужно.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

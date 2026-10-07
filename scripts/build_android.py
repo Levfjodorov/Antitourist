@@ -92,6 +92,8 @@ def main() -> int:
         print('Prepared: ' + str(build))
         return 0
     run(flutter, ['pub', 'get'], build)
+    # Generate launcher resources in the isolated project before compiling.
+    run(flutter, ['pub', 'run', 'flutter_launcher_icons'], build)
     run(flutter, ['analyze'], build)
     run(flutter, ['test'], build)
     run(flutter, ['build', 'apk', '--release'], build)

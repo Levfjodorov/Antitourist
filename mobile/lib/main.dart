@@ -2,25 +2,46 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'external_links.dart';
+import 'language_settings.dart';
 import 'osm.dart';
 import 'overpass.dart';
 import 'places.dart';
-import 'route_map.dart';
 import 'results_screen.dart';
+import 'route_map.dart';
 
-void main() => runApp(const AntiTouristApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final settings = await LanguageSettings.load();
+  runApp(AntiTouristApp(settings: settings));
+}
 
-class AntiTouristApp extends StatelessWidget {
-  const AntiTouristApp({super.key});
+class AntiTouristApp extends StatefulWidget {
+  const AntiTouristApp({super.key, this.settings});
+  final LanguageSettings? settings;
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false, title: 'AntiTourist',
-    theme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
-      colorSchemeSeed: const Color(0xffb5f36a),
-      scaffoldBackgroundColor: const Color(0xff111711)),
-    home: const HomeScreen());
+  State<AntiTouristApp> createState() => _AntiTouristAppState();
+}
+
+class _AntiTouristAppState extends State<AntiTouristApp> {
+  late final LanguageSettings settings;
+  @override
+  void initState() { super.initState(); settings = widget.settings ?? LanguageSettings(); }
+  @override
+  void dispose() { if (widget.settings == null) { settings.dispose(); } super.dispose(); }
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(animation: settings,
+    builder: (_, child) => LanguageScope(settings: settings, child: MaterialApp(
+      debugShowCheckedModeBanner: false, title: 'AntiTourist',
+      locale: Locale(settings.language.code),
+      supportedLocales: const [Locale('ru'), Locale('et'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      theme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
+        colorSchemeSeed: const Color(0xffb5f36a),
+        scaffoldBackgroundColor: const Color(0xff111711)),
+      home: const HomeScreen())));
 }
 
 class HomeScreen extends StatefulWidget {
@@ -33,7 +54,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final service = OverpassService();
   final interests = <String>{'history', 'weird', 'views'};
   GeoPoint start = tallinnStart;
-  String startLabel = 'Центр Таллинна';
+  String startLabel = 'startTallinn';
+  int? accuracyMeters;
   double hours = 2, wildness = 70, radiusKm = 2;
   bool demo = false, onlyPublic = false, loading = false;
   String? error;
@@ -66,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!point.valid) { throw const SearchFailure('Телефон вернул некорректные координаты.'); }
       if (mounted) { setState(() {
         start = point;
-        startLabel = 'Моя геопозиция · точность ≈ ${position.accuracy.round()} м';
+        startLabel = 'startGps'; accuracyMeters = position.accuracy.round();
       }); }
     } on TimeoutException {
       if (mounted) { setState(() => error = 'Не удалось определить позицию за 20 секунд. Повтори снаружи или выбери точку на карте.'); }
@@ -83,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final point = await Navigator.of(context).push<GeoPoint>(MaterialPageRoute(
       builder: (_) => StartPicker(initial: start)));
     if (point != null && mounted) { setState(() {
-      start = point; startLabel = 'Старт выбран на карте'; error = null; locationSettings = null;
+      start = point; startLabel = 'startMap'; error = null; locationSettings = null;
     }); }
   }
 
@@ -130,70 +152,75 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('AntiTourist · 0.3')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.4.0')),
     body: ListView(padding: const EdgeInsets.all(24), children: [
-      const Text('Город за пределами\nпутеводителей.',
-        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+      Align(alignment: Alignment.centerLeft, child: Image.asset(
+        'assets/branding/logo_foreground.png', width: 112, height: 112,
+        semanticLabel: tr(context, 'logo'))),
       const SizedBox(height: 12),
-      const Text('Найди интересные детали рядом: искусство, историю, виды и кофе.'),
+      Text(tr(context, 'headline'),
+        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 12),
+      Text(tr(context, 'intro')),
       const SizedBox(height: 20),
       Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(startLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          Text('${start.lat.toStringAsFixed(5)}, ${start.lon.toStringAsFixed(5)}'),
+          Text(tr(context, startLabel, {'distance': accuracyMeters ?? 0}), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             OutlinedButton.icon(onPressed: loading ? null : locate,
-              icon: const Icon(Icons.my_location), label: const Text('Моя геопозиция')),
-            TextButton(onPressed: loading ? null : pickStart, child: const Text('Выбрать на карте')),
+              icon: const Icon(Icons.my_location), label: Text(tr(context, 'myLocation'))),
+            TextButton(onPressed: loading ? null : pickStart, child: Text(tr(context, 'chooseMap'))),
             TextButton(onPressed: loading ? null : () => setState(() {
-              start = tallinnStart; startLabel = 'Центр Таллинна'; error = null; locationSettings = null;
-            }), child: const Text('Таллинн')),
+              start = tallinnStart; startLabel = 'startTallinn'; error = null; locationSettings = null;
+            }), child: Text(tr(context, 'tallinn'))),
           ]),
         ]))),
       const SizedBox(height: 12),
-      Text('Радиус поиска: ${radiusKm.round()} км'),
+      Text(tr(context, 'radius', {'value': radiusKm.round()})),
       Slider(value: radiusKm, min: 1, max: 5, divisions: 4,
         onChanged: loading || demo ? null : (v) => setState(() => radiusKm = v)),
-      Text('Время на прогулку: ${hours.round()} ч'),
+      Text(tr(context, 'hours', {'value': hours.round()})),
       Slider(value: hours, min: 1, max: 5, divisions: 4,
         onChanged: loading ? null : (v) => setState(() => hours = v)),
-      const Text('Время задаёт размер подборки. После расчёта пути покажем оценку прогулки с остановками.'),
+      Text(tr(context, 'timeHint')),
       const SizedBox(height: 20),
-      Text('Необычность: ${wildness.round()}%'),
+      Text(tr(context, 'novelty', {'value': wildness.round()})),
       Slider(value: wildness, min: 0, max: 100, divisions: 10,
         onChanged: loading ? null : (v) => setState(() => wildness = v)),
-      const Text('Больше необычности — выше вес типов объектов; меньше — выше вес близости.'),
+      Text(tr(context, 'noveltyHint')),
       const SizedBox(height: 12),
+      Text(tr(context, 'interests')),
+      const SizedBox(height: 8),
       Wrap(spacing: 8, children: categoryNames.entries.map((entry) => FilterChip(
-        label: Text(entry.value), selected: interests.contains(entry.key),
+        label: Text(context.strings.category(entry.key)), selected: interests.contains(entry.key),
         onSelected: loading ? null : (v) => setState(() {
           if (v) { interests.add(entry.key); } else { interests.remove(entry.key); }
         }))).toList()),
       if (!demo) SwitchListTile(contentPadding: EdgeInsets.zero,
-        title: const Text('Только с разрешённым доступом в OSM'),
-        subtitle: const Text('У многих мест доступ не указан, поэтому этот фильтр сокращает подборку.'),
+        title: Text(tr(context, 'publicOnly')),
+        subtitle: Text(tr(context, 'publicHint')),
         value: onlyPublic, onChanged: loading ? null : (v) => setState(() => onlyPublic = v)),
       SwitchListTile(contentPadding: EdgeInsets.zero,
-        title: const Text('Демонстрационный режим'),
-        subtitle: const Text('Вымышленные точки из версии 0.1'),
+        title: Text(tr(context, 'demoMode')),
+        subtitle: Text(tr(context, 'demoHint')),
         value: demo, onChanged: loading ? null : (v) => setState(() => demo = v)),
       if (error != null) ...[
-        Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        Text(context.strings.error(error!), style: TextStyle(color: Theme.of(context).colorScheme.error)),
         if (locationSettings != null) TextButton(onPressed: () async {
           if (locationSettings == 'app') { await Geolocator.openAppSettings(); }
           else { await Geolocator.openLocationSettings(); }
-        }, child: const Text('Открыть настройки')),
+        }, child: Text(tr(context, 'settings'))),
         const SizedBox(height: 12),
       ],
       FilledButton.icon(onPressed: loading ? null : generate,
         icon: loading ? const SizedBox(width: 18, height: 18,
           child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.casino_outlined),
         label: Padding(padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(loading ? 'Подожди…' : 'УДИВИ МЕНЯ'))),
+          child: Text(loading ? tr(context, 'wait') : tr(context, 'surprise')))),
       const SizedBox(height: 14),
-      const Text('Для поиска координаты старта отправляются сервису Overpass. Карта загружается из OpenStreetMap. GPS запрашивается по кнопке.'),
+      Text(tr(context, 'privacy')),
       TextButton(onPressed: () => openExternal(context, Uri.parse('https://www.openstreetmap.org/copyright')),
-        child: const Text('Данные © OpenStreetMap contributors')),
+        child: Text(tr(context, 'attribution'))),
     ]));
 }

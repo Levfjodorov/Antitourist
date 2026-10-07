@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'language_settings.dart';
 
 Future<void> openExternal(BuildContext context, Uri uri) async {
   try {
@@ -9,7 +10,7 @@ Future<void> openExternal(BuildContext context, Uri uri) async {
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть ссылку. Проверь браузер на телефоне.')));
+        SnackBar(content: Text(tr(context, 'linkError'))));
     }
   }
 }

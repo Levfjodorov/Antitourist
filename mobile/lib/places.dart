@@ -32,7 +32,9 @@ class Place {
     required this.lon, required this.description, required this.score,
     required this.legalAccess, this.safetyNote, this.id = '', this.osmUrl,
     this.distance = 0, this.coordinateIsCenter = false,
-    this.accessLabel = 'Доступ не указан', this.tags = const {}});
+    this.accessLabel = 'Доступ не указан', this.tags = const {},
+    this.localizedNames = const {}, this.localizedDescriptions = const {},
+    this.localizedSafetyNotes = const {}});
   final String name, category, description, id, accessLabel;
   final double lat, lon, score, distance;
   // For live data this means an explicit public/permissive OSM tag, not a legal verification.
@@ -40,6 +42,7 @@ class Place {
   final String? safetyNote;
   final Uri? osmUrl;
   final Map<String, String> tags;
+  final Map<String, String> localizedNames, localizedDescriptions, localizedSafetyNotes;
   GeoPoint get point => GeoPoint(lat, lon);
 
   factory Place.fromJson(Map<String, dynamic> json) {
@@ -53,7 +56,10 @@ class Place {
       category: json['category'] as String, lat: lat, lon: lon,
       description: json['description'] as String, score: score,
       legalAccess: json['legal_access'] == true,
-      id: json['id'] as String? ?? '', safetyNote: json['safety_note'] as String?);
+      id: json['id'] as String? ?? '', safetyNote: json['safety_note'] as String?,
+      localizedNames: Map<String, String>.from(json['names'] as Map? ?? const {}),
+      localizedDescriptions: Map<String, String>.from(json['descriptions'] as Map? ?? const {}),
+      localizedSafetyNotes: Map<String, String>.from(json['safety_notes'] as Map? ?? const {}));
   }
 }
 
