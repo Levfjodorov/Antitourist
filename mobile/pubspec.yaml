@@ -1,6 +1,6 @@
 name: antitourist
 publish_to: 'none'
-version: 0.2.0+3
+version: 0.3.0+4
 
 environment:
   sdk: '>=3.6.0 <4.0.0'

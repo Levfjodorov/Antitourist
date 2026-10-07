@@ -41,7 +41,7 @@ class OverpassService {
     try {
       final response = await _client.post(
         Uri.https('overpass-api.de', '/api/interpreter'),
-        headers: {'User-Agent': 'AntiTourist/0.2 (Android prototype)', 'Accept': 'application/json'},
+        headers: {'User-Agent': 'AntiTourist/0.3 (Android prototype)', 'Accept': 'application/json'},
         body: {'data': query},
       ).timeout(const Duration(seconds: 35));
       if (response.statusCode == 429) {

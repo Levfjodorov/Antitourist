@@ -17,6 +17,11 @@ void main() {
     expect(query, contains('(around:2000,59.437000,24.753600)'));
     expect(query, endsWith('out body center;'));
     expect(query, isNot(contains('amenity')));
+    expect(query, contains(r'[historic~"^(memorial|monument|ruins|archaeological_site|boundary_stone)$"]'));
+    final otherQuery = buildOverpassQuery(tallinnStart, 2000, {'food', 'industrial'});
+    expect(otherQuery, contains(r'[amenity~"^(cafe|restaurant)$"]'));
+    expect(otherQuery, contains(r'[historic~"^(bunker|industrial)$"]'));
+    expect(otherQuery, contains(r'[man_made~"^(crane|water_tower)$"]'));
     expect(() => buildOverpassQuery(tallinnStart, 5001, {'history'}), throwsFormatException);
     expect(() => buildOverpassQuery(tallinnStart, 2000, {'injected;'}), throwsFormatException);
     expect(() => buildOverpassQuery(const GeoPoint(91, 0), 2000, {'history'}), throwsFormatException);

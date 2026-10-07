@@ -8,6 +8,7 @@ import 'osm.dart';
 import 'overpass.dart';
 import 'places.dart';
 import 'route_map.dart';
+import 'results_screen.dart';
 
 void main() => runApp(const AntiTouristApp());
 
@@ -117,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (!mounted) { return; }
       await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => ResultsScreen(
-        places: selected, demo: requestedDemo, start: origin, candidateCount: candidateCount)));
+        places: selected, demo: requestedDemo, start: origin, candidateCount: candidateCount, requestedMinutes: (hours * 60).round())));
     } on SearchFailure catch (e) {
       if (mounted) { setState(() => error = e.message); }
     } catch (_) {
@@ -129,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('AntiTourist · 0.2')),
+    appBar: AppBar(title: const Text('AntiTourist · 0.3')),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       const Text('Город за пределами\nпутеводителей.',
         style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
@@ -157,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
       Text('Время на прогулку: ${hours.round()} ч'),
       Slider(value: hours, min: 1, max: 5, divisions: 4,
         onChanged: loading ? null : (v) => setState(() => hours = v)),
-      const Text('Время пока определяет размер подборки, а не длительность пути.'),
+      const Text('Время задаёт размер подборки. После расчёта пути покажем оценку прогулки с остановками.'),
       const SizedBox(height: 20),
       Text('Необычность: ${wildness.round()}%'),
       Slider(value: wildness, min: 0, max: 100, divisions: 10,
@@ -194,53 +195,5 @@ class _HomeScreenState extends State<HomeScreen> {
       const Text('Для поиска координаты старта отправляются сервису Overpass. Карта загружается из OpenStreetMap. GPS запрашивается по кнопке.'),
       TextButton(onPressed: () => openExternal(context, Uri.parse('https://www.openstreetmap.org/copyright')),
         child: const Text('Данные © OpenStreetMap contributors')),
-    ]));
-}
-
-class ResultsScreen extends StatelessWidget {
-  const ResultsScreen({super.key, required this.places, required this.demo,
-    required this.start, required this.candidateCount});
-  final List<Place> places;
-  final bool demo;
-  final GeoPoint start;
-  final int candidateCount;
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Твоя подборка')),
-    body: ListView(padding: const EdgeInsets.all(20), children: [
-      Text('${places.length} необычных точек',
-        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 12),
-      Text(demo ? 'ДЕМО · Все точки вымышленные.'
-        : 'Отобрано из $candidateCount объектов OSM. Расстояния по прямой; путь по улицам ещё не рассчитан.'),
-      if (!demo) const Padding(padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('Рейтинг основан на типе объекта. Популярность и количество туристов пока неизвестны.')),
-      OutlinedButton.icon(icon: const Icon(Icons.map_outlined),
-        label: const Text('Показать на карте'),
-        onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute(
-          builder: (_) => RouteMap(places: places, demo: demo, start: start)))),
-      const SizedBox(height: 12),
-      for (var i = 0; i < places.length; i++) Card(child: Padding(
-        padding: const EdgeInsets.all(18), child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${i + 1}. ${places[i].name}',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('${categoryNames[places[i].category]} · Необычность ${places[i].score.round()}/100'),
-            if (!demo) Text('${formatDistance(places[i].distance)} от старта по прямой'),
-            const SizedBox(height: 10), Text(places[i].description),
-            if (!demo) ...[
-              const SizedBox(height: 10), Text(places[i].accessLabel),
-              if (places[i].coordinateIsCenter)
-                const Text('Маркер — центр объекта, а не подтверждённый вход.'),
-            ],
-            if (places[i].safetyNote != null) ...[
-              const SizedBox(height: 10), Text(places[i].safetyNote!),
-            ],
-            if (places[i].osmUrl != null) TextButton.icon(
-              onPressed: () => openExternal(context, places[i].osmUrl!),
-              icon: const Icon(Icons.open_in_new), label: const Text('Источник OSM')),
-          ]))),
-      if (!demo) const Text('Данные © OpenStreetMap contributors. Доступность и часы работы могут меняться.'),
     ]));
 }

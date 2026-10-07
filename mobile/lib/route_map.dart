@@ -3,34 +3,44 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'external_links.dart';
 import 'places.dart';
+import 'walking_route.dart';
 
 Widget osmAttribution(BuildContext context) => SimpleAttributionWidget(
   source: const Text('OpenStreetMap contributors'),
   onTap: () => openExternal(context, Uri.parse('https://www.openstreetmap.org/copyright')));
 
 class RouteMap extends StatelessWidget {
-  const RouteMap({super.key, required this.places, required this.demo, required this.start});
+  const RouteMap({super.key, required this.places, required this.demo, required this.start, this.route});
   final List<Place> places;
   final bool demo;
   final GeoPoint start;
+  final WalkingRoute? route;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Точки на карте')),
+    appBar: AppBar(title: Text(route == null ? 'Точки на карте' : 'Пеший маршрут')),
     body: Column(children: [
       Padding(padding: const EdgeInsets.all(12), child: Text(demo
         ? 'ДЕМО · Вымышленные точки.'
-        : 'Места из OSM. Расстояния по прямой; пешеходный путь ещё не рассчитан.')),
+        : route == null ? 'Места из OSM. Расстояния по прямой; пешеходный путь ещё не рассчитан.'
+        : 'Пешком ${formatDistance(route!.meters)} · ≈ ${formatMinutes(route!.walkMinutes)}. Линия — путь по данным OSM.')),
+      if (route != null && route!.snapDistances.any((distance) => distance > 5))
+        const Padding(padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text('Путь подходит к ближайшим пешеходным участкам рядом с маркерами; входы проверь на месте.')),
       Expanded(child: FlutterMap(
         options: MapOptions(initialCenter: LatLng(start.lat, start.lon), initialZoom: 13,
           initialCameraFit: CameraFit.bounds(
             bounds: LatLngBounds.fromPoints([
               LatLng(start.lat, start.lon),
               for (final place in places) LatLng(place.lat, place.lon),
+              if (route != null) for (final point in route!.geometry) LatLng(point.lat, point.lon),
             ], drawInSingleWorld: true),
             padding: const EdgeInsets.all(44), maxZoom: 16)),
         children: [
           TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.antitourist.antitourist', maxNativeZoom: 19),
+          if (route != null) PolylineLayer(polylines: [Polyline(
+            points: [for (final point in route!.geometry) LatLng(point.lat, point.lon)],
+            strokeWidth: 5, color: const Color(0xff246bfd))]),
           MarkerLayer(markers: [
             Marker(point: LatLng(start.lat, start.lon), width: 42, height: 42,
               child: const Tooltip(message: 'Старт поиска',
@@ -62,6 +72,14 @@ class RouteMap extends StatelessWidget {
           ]),
           osmAttribution(context),
         ])),
+      if (route != null) SafeArea(top: false, child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8), child: Wrap(
+          alignment: WrapAlignment.center, spacing: 8, children: [
+            TextButton(onPressed: () => openExternal(context, Uri.parse('https://routing.openstreetmap.de/about.html')),
+              child: const Text('Маршруты: OSRM / FOSSGIS')),
+            TextButton(onPressed: () => openExternal(context, Uri.parse('https://www.openstreetmap.org/fixthemap')),
+              child: const Text('Исправить карту OSM')),
+          ]))),
     ]));
 }
 
