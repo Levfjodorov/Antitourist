@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'route_fixtures.dart';
 
+import 'test_helpers.dart';
+
 void main() {
   testWidgets('Changing language keeps visited stops and undo history', (tester) async {
     final settings = LanguageSettings();
@@ -21,9 +23,7 @@ void main() {
     expect(session.currentIndex, 1);
     expect(session.visited, 1);
     expect(session.canUndo, isTrue);
-    await tester.scrollUntilVisible(find.text('Võta viimane märge tagasi'), 200);
-    await tester.tap(find.text('Võta viimane märge tagasi'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Võta viimane märge tagasi');
     expect(session.currentIndex, 0);
     expect(session.visited, 0);
     expect(tester.takeException(), isNull);
@@ -37,17 +37,11 @@ void main() {
     final session = WalkSession(sampleRoute());
     await tester.pumpWidget(MaterialApp(home: WalkScreen(session: session, start: tallinnStart)));
     expect(find.text('Первое место'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Я здесь побывал — дальше'), 200);
-    await tester.tap(find.text('Я здесь побывал — дальше'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Я здесь побывал — дальше');
     expect(session.currentIndex, 1);
-    await tester.scrollUntilVisible(find.text('Пропустить место'), 150);
-    await tester.tap(find.text('Пропустить место'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Пропустить место');
     expect(session.complete, isTrue);
-    await tester.scrollUntilVisible(find.text('Отменить последнюю отметку'), 150);
-    await tester.tap(find.text('Отменить последнюю отметку'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Отменить последнюю отметку');
     expect(session.currentIndex, 1);
     expect(tester.takeException(), isNull);
   });

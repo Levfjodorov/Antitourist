@@ -95,7 +95,7 @@ def main() -> int:
     # Generate launcher resources in the isolated project before compiling.
     run(flutter, ['pub', 'run', 'flutter_launcher_icons'], build)
     run(flutter, ['analyze'], build)
-    run(flutter, ['test'], build)
+    run(flutter, ['test', '--reporter', 'expanded'], build)
     run(flutter, ['build', 'apk', '--release'], build)
     apk = build / 'build' / 'app' / 'outputs' / 'flutter-apk' / 'app-release.apk'
     if not apk.is_file():

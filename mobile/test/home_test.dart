@@ -2,6 +2,8 @@ import 'package:antitourist/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_helpers.dart';
+
 void main() {
   testWidgets('Live mode is default and narrow screens can reach search', (tester) async {
     tester.view.devicePixelRatio = 1;
@@ -23,12 +25,10 @@ void main() {
   testWidgets('Demo opens fictional results without using live search', (tester) async {
     await tester.pumpWidget(const AntiTouristApp());
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Попробовать на примере'), 250);
-    await tester.tap(find.text('Попробовать на примере'));
-    await tester.pump();
-    await tester.scrollUntilVisible(find.text('Удиви меня'), 250);
-    await tester.tap(find.text('Удиви меня'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Попробовать на примере');
+    expect(tester.widget<SwitchListTile>(find.widgetWithText(
+      SwitchListTile, 'Попробовать на примере')).value, isTrue);
+    await tapVisibleControl(tester, 'Удиви меня');
     expect(find.text('Места для прогулки'), findsOneWidget);
     expect(find.text('Пример · Места вымышленные, идти к ним не нужно.'), findsOneWidget);
     expect(tester.takeException(), isNull);

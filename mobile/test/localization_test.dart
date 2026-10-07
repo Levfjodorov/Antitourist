@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:antitourist/language_settings.dart';
 import 'package:antitourist/main.dart';
 import 'package:antitourist/osm.dart';
@@ -6,8 +7,9 @@ import 'package:antitourist/places.dart';
 import 'package:antitourist/strings.dart';
 import 'package:antitourist/translations.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'test_helpers.dart';
 
 class MemoryLanguageStore implements LanguageStore {
   String? value;
@@ -84,24 +86,22 @@ void main() {
     addTearDown(settings.dispose);
     await tester.pumpWidget(AntiTouristApp(settings: settings));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Попробовать на примере'), 200);
-    await tester.tap(find.text('Попробовать на примере'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Попробовать на примере');
     await tester.tap(find.byKey(const ValueKey('language-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Eesti'));
+    await tester.tap(find.ancestor(of: find.text('Eesti'),
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuEntry<AppLanguage>)).first);
     await tester.pumpAndSettle();
     expect(store.value, 'et');
     final demoSwitch = tester.widgetList<SwitchListTile>(find.byType(SwitchListTile))
       .singleWhere((s) => (s.title as Text).data == 'Proovi näidisandmetega');
     expect(demoSwitch.value, isTrue);
-    await tester.scrollUntilVisible(find.text('Üllata mind'), 200);
-    await tester.tap(find.text('Üllata mind'));
-    await tester.pumpAndSettle();
+    await tapVisibleControl(tester, 'Üllata mind');
     expect(find.text('Kohad jalutuskäiguks'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('language-menu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('English'));
+    await tester.tap(find.ancestor(of: find.text('English'),
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuEntry<AppLanguage>)).first);
     await tester.pumpAndSettle();
     expect(find.text('Places for your walk'), findsOneWidget);
     expect(find.text('Example · These places are fictional. Do not use them for a real walk.'), findsOneWidget);
@@ -111,7 +111,7 @@ void main() {
   });
 
   test('Example places have translated content in all supported languages', () async {
-    final raw = jsonDecode(await rootBundle.loadString('assets/demo_places.json')) as List<dynamic>;
+    final raw = jsonDecode(await File('assets/demo_places.json').readAsString()) as List<dynamic>;
     for (final entry in raw) {
       final place = Place.fromJson(entry as Map<String, dynamic>);
       for (final language in AppLanguage.values) {

@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.4.0')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.4.1')),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       Align(alignment: Alignment.centerLeft, child: Image.asset(
         'assets/branding/logo_foreground.png', width: 112, height: 112,
