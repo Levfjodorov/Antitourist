@@ -82,17 +82,28 @@ void main() {
   late ImageHttpClient client;
   setUp(() {
     client = ImageHttpClient();
-    debugNetworkImageHttpClientProvider = () => client;
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
   });
   tearDown(() {
-    debugNetworkImageHttpClientProvider = null;
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
   });
 
-  testWidgets('Gallery starts at the selected photo, pages and resets zoom', (tester) async {
+  void photoTest(String name, Future<void> Function(WidgetTester) body) {
+    testWidgets(name, (tester) async {
+      final previous = debugNetworkImageHttpClientProvider;
+      debugNetworkImageHttpClientProvider = () => client;
+      try {
+        await body(tester);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        debugNetworkImageHttpClientProvider = previous;
+      }
+    });
+  }
+
+  photoTest('Gallery starts at the selected photo, pages and resets zoom', (tester) async {
     await tester.pumpWidget(MaterialApp(home: PlacePhotoScreen(
       photos: gallery, placeName: 'Test place', initialIndex: 1)));
     await tester.pumpAndSettle();
@@ -108,11 +119,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Фото 3 из 3'), findsOneWidget);
     expect(find.text('Author 2'), findsOneWidget);
-    expect(tester.widget<IconButton>(find.byTooltip('Следующее фото')).onPressed, isNull);
+    final next = find.byWidgetPredicate((widget) =>
+      widget is IconButton && widget.tooltip == 'Следующее фото');
+    expect(tester.widget<IconButton>(next).onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('An image can be retried after the network recovers', (tester) async {
+  photoTest('An image can be retried after the network recovers', (tester) async {
     client.fail = true;
     await tester.pumpWidget(MaterialApp(home: PlacePhotoScreen(
       photos: [gallery.first], placeName: 'Test place')));
@@ -127,7 +140,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Photos remain usable in landscape with large text and language changes', (tester) async {
+  photoTest('Photos remain usable in landscape with large text and language changes', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(640, 360);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -148,7 +161,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Place details open the selected nearby photo and return to the same place', (tester) async {
+  photoTest('Place details open the selected nearby photo and return to the same place', (tester) async {
     final service = GalleryDetailsService();
     await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
       place: routePlaces.first, demo: false, service: service)));

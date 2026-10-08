@@ -78,7 +78,8 @@ class _PlacePhotoScreenState extends State<PlacePhotoScreen> {
           itemBuilder: (context, page) => InteractiveViewer(
             transformationController: zooms[page], minScale: 1, maxScale: 5,
             child: Center(child: PlacePhotoImage(photo: widget.photos[page],
-              label: widget.photos[page].caption ?? widget.placeName)),
+              label: widget.photos[page].caption?.trim().isNotEmpty == true
+                ? widget.photos[page].caption! : widget.placeName)),
           ),
         )),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
