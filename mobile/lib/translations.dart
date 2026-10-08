@@ -8,6 +8,8 @@ const translations = <String, List<String>>{
   "resetPhotoZoom": ["Сбросить масштаб", "Lähtesta suum", "Reset zoom"],
   "photoLoading": ["Загружаем фото", "Laadime fotot", "Loading photo"],
   "retryPhoto": ["Загрузить фото ещё раз", "Laadi foto uuesti", "Retry photo"],
+  "retryPage": ["Повторить загрузку", "Proovi uuesti laadida", "Retry loading"],
+  "webLinkUnavailable": ["Эта ссылка недоступна во встроенном просмотре.", "See link pole rakendusesiseses vaates saadaval.", "This link is unavailable in the embedded view."],
   "inAppLinkError": ["Не удалось открыть страницу внутри приложения. Попробуй ещё раз.", "Lehte ei saanud rakenduses avada. Proovi uuesti.", "Could not open the page inside the app. Try again."],
 
   "nearAddress": ["Адрес рядом: {value}", "Lähim aadress: {value}", "Nearby address: {value}"],
