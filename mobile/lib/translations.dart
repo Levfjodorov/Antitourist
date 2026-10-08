@@ -1,5 +1,15 @@
 // Complete UI catalogue: Russian, Estonian, English (AppLanguage order).
 const translations = <String, List<String>>{
+  "openPhoto": ["На весь экран", "Ava täisekraanil", "View full screen"],
+  "galleryCounter": ["Фото {current} из {total}", "Foto {current}/{total}", "Photo {current} of {total}"],
+  "photoZoomHint": ["Разведи пальцы, чтобы увеличить фото. Листай снимки стрелками.", "Foto suurendamiseks liiguta sõrmi lahku. Vaheta fotosid nooltega.", "Pinch to zoom. Use the arrows to browse photos."],
+  "previousPhoto": ["Предыдущее фото", "Eelmine foto", "Previous photo"],
+  "nextPhoto": ["Следующее фото", "Järgmine foto", "Next photo"],
+  "resetPhotoZoom": ["Сбросить масштаб", "Lähtesta suum", "Reset zoom"],
+  "photoLoading": ["Загружаем фото", "Laadime fotot", "Loading photo"],
+  "retryPhoto": ["Загрузить фото ещё раз", "Laadi foto uuesti", "Retry photo"],
+  "inAppLinkError": ["Не удалось открыть страницу внутри приложения. Попробуй ещё раз.", "Lehte ei saanud rakenduses avada. Proovi uuesti.", "Could not open the page inside the app. Try again."],
+
   "nearAddress": ["Адрес рядом: {value}", "Lähim aadress: {value}", "Nearby address: {value}"],
   "addressLoading": ["Определяем адрес…", "Leiame aadressi…", "Finding the address…"],
   "addressUnavailable": ["Не удалось определить адрес. Координаты доступны ниже.", "Aadressi ei saanud leida. Koordinaadid on allpool.", "Could not find the address. Coordinates are available below."],
@@ -12,7 +22,7 @@ const translations = <String, List<String>>{
   "nearbyPhotosHint": ["Эти снимки сделаны рядом по координатам Wikimedia. Они могут показывать другое здание или вид вокруг. Проверь подпись и источник.", "Wikimedia koordinaatide järgi on need fotod tehtud läheduses. Neil võib olla teine hoone või ümbruse vaade. Kontrolli kirjeldust ja allikat.", "Wikimedia coordinates place these photos nearby. They may show another building or the surrounding area. Check the caption and source."],
   "nearbyPhotoDistance": ["Место съёмки примерно в {distance} м от выбранной точки", "Võttekoht on valitud punktist umbes {distance} m kaugusel", "Photo location about {distance} m from the selected point"],
   "googlePhotosTitle": ["Посмотреть место в Google", "Vaata kohta Google’is", "View the place on Google"],
-  "googlePhotosHint": ["Откроем поиск этого места в Google Maps. Там можно посмотреть фото и отзывы, если они есть. Проверь, что найдено нужное место. Снимки Google здесь не копируются.", "Avame selle koha otsingu Google Mapsis. Seal saab vaadata fotosid ja arvustusi, kui neid on. Kontrolli, et leitud koht on õige. Google’i fotosid siia ei kopeerita.", "Open a search for this place in Google Maps to see available photos and reviews. Check that the result is the right place. Google photos are not copied into this screen."],
+  "googlePhotosHint": ["Google Maps откроется внутри приложения. Там можно посмотреть фото и отзывы, если они есть. Проверь, что найдено нужное место.", "Google Maps avaneb rakenduses. Seal saab vaadata fotosid ja arvustusi, kui neid on. Kontrolli, et leitud koht on õige.", "Google Maps opens inside the app to show available photos and reviews. Check that the result is the right place."],
   "googlePlaceSearch": ["Найти в Google Maps", "Leia Google Mapsist", "Find on Google Maps"],
   "fictionalPlace": ["Вымышленное место для примера", "Väljamõeldud näidiskoht", "Fictional example place"],
   "alwaysOpenHours": ["Круглосуточно", "Ööpäev läbi", "24 hours a day"],
@@ -82,7 +92,7 @@ const translations = <String, List<String>>{
   "noExtraInfo": ["Дополнительного описания пока нет. Можно открыть сведения на карте.", "Lisakirjeldus puudub. Saad avada koha kaardiandmed.", "No additional description is available. You can open the map entry."],
   "photoError": ["Не удалось показать фото. Попробуй загрузить ещё раз.", "Fotot ei saanud näidata. Proovi uuesti laadida.", "Could not display the photo. Try loading it again."],
   "photoSource": ["Фото на Wikimedia Commons", "Foto Wikimedia Commonsis", "Photo on Wikimedia Commons"],
-  "articleSource": ["Читать источник", "Loe allikat", "Read the source"],
+  "articleSource": ["Открыть полную статью", "Ava kogu artikkel", "Read the full article"],
   "wikipediaLicense": ["Лицензия текста Wikipedia", "Wikipedia teksti litsents", "Wikipedia text license"],
   "sourceLanguageHint": ["Текст из связанного источника; он может быть на другом языке.", "Tekst pärineb seotud allikast ja võib olla teises keeles.", "Text comes from a linked source and may be in another language."],
   "placeDataHint": ["Сведения на карте могут быть неполными или устаревшими. Фото показывает место, но не его состояние сегодня.", "Kaardiandmed võivad olla puudulikud või aegunud. Foto ei pruugi näidata koha praegust seisukorda.", "Map information may be incomplete or outdated. A photo may not show the place’s current condition."],

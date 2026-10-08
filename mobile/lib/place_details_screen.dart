@@ -4,6 +4,8 @@ import 'google_place_links.dart';
 import 'language_settings.dart';
 import 'place_card.dart';
 import 'place_details_service.dart';
+import 'place_photo_image.dart';
+import 'place_photo_screen.dart';
 import 'places.dart';
 
 class PlaceDetailsScreen extends StatefulWidget {
@@ -35,21 +37,27 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
       if (mounted) { setState(() => loading = false); }
     }
   }
-  Widget _photo(PlacePhoto photo, String label) => Column(
+  void _openPhoto(PlacePhoto photo, List<PlacePhoto> photos) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PlacePhotoScreen(
+      photos: List.unmodifiable(photos), initialIndex: photos.indexOf(photo),
+      placeName: context.strings.name(widget.place))));
+  }
+  Widget _photo(PlacePhoto photo, String label, List<PlacePhoto> photos) => Column(
     crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 12),
-      ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(photo.url.toString(),
-        headers: const {'User-Agent': wikimediaUserAgent}, height: 240, width: double.infinity,
-        fit: BoxFit.cover, semanticLabel: label,
-        errorBuilder: (_, error, stack) => SizedBox(height: 100, child: Center(child: Text(tr(context, 'photoError')))),
-        loadingBuilder: (_, child, progress) => progress == null ? child
-          : const SizedBox(height: 240, child: Center(child: CircularProgressIndicator())))),
+      Semantics(button: true, label: tr(context, 'openPhoto'), child: InkWell(
+        onTap: () => _openPhoto(photo, photos),
+        child: ClipRRect(borderRadius: BorderRadius.circular(12),
+          child: PlacePhotoImage(photo: photo, label: label, height: 240, fit: BoxFit.cover)))),
       const SizedBox(height: 8),
       if (photo.caption != null && photo.caption!.isNotEmpty) Text(photo.caption!),
       Text(photo.credit),
       Wrap(spacing: 8, children: [
-        TextButton(onPressed: () => openExternal(context, photo.source), child: Text(tr(context, 'photoSource'))),
-        if (photo.licenseUrl != null) TextButton(onPressed: () => openExternal(context, photo.licenseUrl!), child: Text(photo.license))
+        TextButton.icon(key: ValueKey('open-photo:${photo.source}'),
+          onPressed: () => _openPhoto(photo, photos),
+          icon: const Icon(Icons.fullscreen), label: Text(tr(context, 'openPhoto'))),
+        TextButton(onPressed: () => openInApp(context, photo.source), child: Text(tr(context, 'photoSource'))),
+        if (photo.licenseUrl != null) TextButton(onPressed: () => openInApp(context, photo.licenseUrl!), child: Text(photo.license))
         else Text(photo.license),
       ]),
     ]);
@@ -58,6 +66,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     final place = widget.place;
     final info = loadedLanguage == context.strings.language.code ? details : null;
     final photo = info?.photo;
+    final photos = <PlacePhoto>[?photo, ...?info?.nearbyPhotos];
     final tags = place.tags;
     final address = [tags['addr:street'], tags['addr:housenumber'], tags['addr:city']]
       .whereType<String>().join(' ');
@@ -95,10 +104,10 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
           if (tags['wheelchair'] case final wheelchair?) Text(tr(context, 'wheelchairRaw', {'value':
             wheelchair == 'yes' ? tr(context, 'yes') : wheelchair == 'no' ? tr(context, 'no')
               : wheelchair == 'limited' ? tr(context, 'limited') : wheelchair})),
-          if (website != null) TextButton.icon(onPressed: () => openExternal(context, website),
+          if (website != null) TextButton.icon(onPressed: () => openInApp(context, website),
             icon: const Icon(Icons.language), label: Text(tr(context, 'website'))),
           if (website == null && websiteLabel != null) SelectableText(tr(context, 'websiteRaw', {'value': websiteLabel})),
-          if (place.osmUrl != null) TextButton.icon(onPressed: () => openExternal(context, place.osmUrl!),
+          if (place.osmUrl != null) TextButton.icon(onPressed: () => openInApp(context, place.osmUrl!),
             icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'source'))),
           const Divider(height: 32),
           Text(tr(context, 'moreInfoTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -110,7 +119,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
             label: Text(tr(context, loading ? 'detailsLoading' : 'loadDetails'))),
           if (failed) Text(tr(context, 'detailsError')),
           if (info != null) ...[
-            if (photo != null) _photo(photo, context.strings.name(place))
+            if (photo != null) _photo(photo, context.strings.name(place), photos)
             else if (!info.partial) Text(tr(context, 'noPhoto')),
             if (info.nearbyPhotos.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -118,23 +127,23 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
               Text(tr(context, 'nearbyPhotosHint')),
               for (final nearby in info.nearbyPhotos) ...[
                 Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
-                _photo(nearby, tr(context, 'nearbyPhotosTitle')),
+                _photo(nearby, tr(context, 'nearbyPhotosTitle'), photos),
               ],
             ],
             if (info.description != null) ...[
-              const SizedBox(height: 12), Text(info.description!),
+              const SizedBox(height: 12), SelectableText(info.description!),
               Text(tr(context, 'sourceLanguageHint')),
             ] else if (!info.partial) Text(tr(context, 'noExtraInfo')),
-            if (info.article != null) TextButton.icon(onPressed: () => openExternal(context, info.article!),
+            if (info.article != null) TextButton.icon(onPressed: () => openInApp(context, info.article!),
               icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'articleSource'))),
             if (info.description != null && info.article?.host.endsWith('.wikipedia.org') == true)
-              TextButton(onPressed: () => openExternal(context, Uri.parse('https://en.wikipedia.org/wiki/Wikipedia:Copyrights')),
+              TextButton(onPressed: () => openInApp(context, Uri.parse('https://en.wikipedia.org/wiki/Wikipedia:Copyrights')),
                 child: Text(tr(context, 'wikipediaLicense'))),
           ],
           const Divider(height: 32),
           Text(tr(context, 'googlePhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           Text(tr(context, 'googlePhotosHint')),
-          OutlinedButton.icon(onPressed: () => openExternal(context,
+          OutlinedButton.icon(onPressed: () => openInApp(context,
             googlePlaceSearch(place, context.strings.name(place))), icon: const Icon(Icons.open_in_new),
             label: Text(tr(context, 'googlePlaceSearch'))),
           const SizedBox(height: 12), Text(tr(context, 'placeDataHint')),
