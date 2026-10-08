@@ -40,7 +40,10 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
-## Android 0.5.2
+## Android 0.5.3
+
+Version 0.5.3 fixes the stale on-screen version: the build script supplies the
+same `pubspec.yaml` version to the app header, tests, and APK compiler.
 
 Version 0.5.2 adds a full-screen photo gallery with pinch-to-zoom, photo retry,
 and embedded browsing for Google Maps, Wikipedia and place websites. Photo
@@ -64,8 +67,8 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.2-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.2-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.5.3-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.3-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,

@@ -199,7 +199,7 @@ class BuildTests(unittest.TestCase):
             path = self.root / 'mobile' / folder
             path.mkdir(parents=True)
             (path / 'new.txt').write_text(folder)
-        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.5.1+9\n')
+        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.8.7+123\n')
         (self.root / 'mobile' / 'pubspec.lock').write_text('test lock')
         calls = []
 
@@ -233,13 +233,13 @@ class BuildTests(unittest.TestCase):
         self.assertTrue((build / 'test' / 'new.txt').is_file())
         self.assertEqual(calls[1:], [
             ['pub', 'get', '--enforce-lockfile'], ['pub', 'run', 'flutter_launcher_icons'],
-            ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded'], ['build', 'apk', '--release', '--no-pub'],
+            ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded', '--dart-define=ANTITOURIST_VERSION=0.8.7'], ['build', 'apk', '--release', '--no-pub', '--dart-define=ANTITOURIST_VERSION=0.8.7'],
         ])
-        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.5.1-test.apk').is_file())
+        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.8.7-test.apk').is_file())
         self.assertEqual((self.root / 'dist' / 'pubspec.lock').read_text(), 'test lock')
         self.assertEqual(json.loads((self.root / 'dist' / 'flutter-version.json').read_text()), {'frameworkVersion': '3.47.6'})
-        self.assertIn('AntiTourist-0.5.1-test.apk', (self.root / 'dist' / 'SHA256SUMS').read_text())
-        self.assertEqual(builder.apk_filename(self.root / 'mobile' / 'pubspec.yaml', True), 'AntiTourist-0.5.1-release.apk')
+        self.assertIn('AntiTourist-0.8.7-test.apk', (self.root / 'dist' / 'SHA256SUMS').read_text())
+        self.assertEqual(builder.apk_filename(self.root / 'mobile' / 'pubspec.yaml', True), 'AntiTourist-0.8.7-release.apk')
 
 
 if __name__ == '__main__':

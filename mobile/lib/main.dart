@@ -15,6 +15,10 @@ import 'places.dart';
 import 'results_screen.dart';
 import 'route_map.dart';
 
+// Android builds supply the version from pubspec.yaml through the build script.
+const appVersion = String.fromEnvironment('ANTITOURIST_VERSION');
+const appTitle = appVersion == '' ? 'AntiTourist' : 'AntiTourist · $appVersion';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await LanguageSettings.load();
@@ -161,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.5.1')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text(appTitle)),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       Align(alignment: Alignment.centerLeft, child: Image.asset(
         'assets/branding/logo_foreground.png', width: 112, height: 112,

@@ -220,7 +220,8 @@ def main() -> int:
     lockfile = ROOT / 'mobile' / 'pubspec.lock'
     if not lockfile.is_file():
         raise RuntimeError('mobile/pubspec.lock is required; resolve dependencies with the pinned Flutter SDK')
-    app_version(pubspec)
+    version_name, _ = app_version(pubspec)
+    version_define = '--dart-define=ANTITOURIST_VERSION=' + version_name
     build = ROOT / 'build' / 'android-project'
     if build.exists():
         print('Refreshing the generated Android project with the pinned Flutter SDK.', flush=True)
@@ -246,8 +247,8 @@ def main() -> int:
     # Generate launcher resources in the isolated project before compiling.
     run(flutter, ['pub', 'run', 'flutter_launcher_icons'], build)
     run(flutter, ['analyze', '--no-pub'], build)
-    run(flutter, ['test', '--no-pub', '--reporter', 'expanded'], build)
-    run(flutter, ['build', 'apk', '--release', '--no-pub'], build)
+    run(flutter, ['test', '--no-pub', '--reporter', 'expanded', version_define], build)
+    run(flutter, ['build', 'apk', '--release', '--no-pub', version_define], build)
     apk = build / 'build' / 'app' / 'outputs' / 'flutter-apk' / 'app-release.apk'
     if not apk.is_file():
         raise RuntimeError('Flutter did not produce the expected APK')

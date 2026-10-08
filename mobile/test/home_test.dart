@@ -12,6 +12,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(const AntiTouristApp());
     await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, appTitle), findsOneWidget);
     expect(find.text('Центр Таллинна'), findsOneWidget);
     expect(find.text('Где я сейчас'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Попробовать на примере'), 250);
