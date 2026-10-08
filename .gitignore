@@ -1,0 +1,10 @@
+/build/
+/dist/
+**/.dart_tool/
+**/__pycache__/
+*.py[cod]
+.venv/
+*.jks
+*.keystore
+**/key.properties
+**/local.properties

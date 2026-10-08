@@ -18,8 +18,7 @@ class PreferencesLanguageStore implements LanguageStore {
 }
 
 class LanguageSettings extends ChangeNotifier {
-  LanguageSettings({AppLanguage language = AppLanguage.ru, LanguageStore? store})
-      : _language = language, _store = store;
+  LanguageSettings({this._language = AppLanguage.ru, this._store});
   AppLanguage _language;
   final LanguageStore? _store;
   AppLanguage get language => _language;
