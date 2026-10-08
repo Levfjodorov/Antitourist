@@ -5,9 +5,9 @@ import 'place_details_service.dart';
 import 'place_photo_image.dart';
 
 class PlacePhotoScreen extends StatefulWidget {
-  PlacePhotoScreen({super.key, required this.photos,
+  const PlacePhotoScreen({super.key, required this.photos,
     required this.placeName, this.initialIndex = 0})
-      : assert(photos.length > 0),
+      : assert(photos.isNotEmpty),
         assert(initialIndex >= 0 && initialIndex < photos.length);
 
   final List<PlacePhoto> photos;

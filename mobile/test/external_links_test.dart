@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 class RecordingUrlLauncher extends UrlLauncherPlatform {
+  @override
+  Null get linkDelegate => null;
   bool supported = true;
   bool succeeds = true;
   final launches = <({String url, LaunchOptions options})>[];
