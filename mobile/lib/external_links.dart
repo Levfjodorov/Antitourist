@@ -11,7 +11,7 @@ Future<void> openExternal(BuildContext context, Uri uri) async {
       throw Exception('No URL handler');
     }
   } catch (_) {
-    _showLinkError(context, 'linkError');
+    if (context.mounted) _showLinkError(context, 'linkError');
   }
 }
 
@@ -22,7 +22,7 @@ Future<void> openInApp(BuildContext context, Uri uri) async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => PlaceWebScreen(uri: uri)));
   } catch (_) {
-    _showLinkError(context, 'inAppLinkError');
+    if (context.mounted) _showLinkError(context, 'inAppLinkError');
   }
 }
 
