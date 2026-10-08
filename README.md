@@ -40,25 +40,34 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
-## Project status
+## Android 0.5.1
 
-This is the initial scaffold. The backend contains a working mock recommendation engine and tests. Real map data and routing are the next milestone.
+The mobile app supports live OpenStreetMap/Overpass place search, GPS and address
+lookup, walking routes, saved walks, favorites, history, restart recovery, and
+place details/photos when available. The interface supports Russian, Estonian,
+and English. The demo points and the separate backend mock data are fictional.
 
-## Android prototype 0.1.1
+**APK compilation is confirmed.**
+[Actions run #12 on October 8, 2026](https://github.com/Levfjodorov/Antitourist/actions/runs/37747134686)
+built `AntiTourist-0.5.1-test.apk` from commit `3b19872`: analysis passed and all
+70 Flutter tests passed. The downloaded APK is 58,850,396 bytes and uses a debug
+signing certificate. Installation and a physical-device smoke test are still
+unverified. See [the build audit](docs/APK_BUILD_AUDIT.md).
 
-Android build scripts and a usable demo UI have been added. See
-[Android instructions (Russian)](docs/ANDROID.md).
+See [Android build and release instructions (Russian)](docs/ANDROID.md).
 
-- Windows: `Build-APK.cmd` (requires Flutter, Android SDK, and Python).
-- Other platforms: `python3 scripts/build_android.py`.
-- GitHub Actions: manually run `Build Android APK` after importing this repository.
-- Expected output after a successful build: `dist/AntiTourist-0.1.1-test.apk`.
+- Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
+- Linux/macOS: `python3 scripts/build_android.py`.
+- GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
+- Test output: `dist/AntiTourist-0.5.1-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.1-release.apk`, using a permanent keystore.
 
-**No APK is included in this archive.** Android tooling is unavailable in the
-preparation environment. Flutter analysis, tests, APK compilation, and device
-installation have not been run here. The scripts run Flutter analysis and tests
-before building. The backend is unchanged from 0.1.
+The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
+runs analysis and tests before compiling, then verifies the APK signature,
+application ID, version, permissions, and minimum SDK. Release signing requires
+four Actions secrets and an explicit manual run from `main`; it never falls back
+to a debug key. Each future release must increase the build number in `pubspec.yaml`.
 
-The local demo uses fictional points and runs without a server. Map tiles need
-internet. These example points must not be used for a real walk. Road routing,
-GPS, real place data, and turn-by-turn navigation are not implemented.
+Maps, live search, routing, and remote photos need internet. The Python backend
+is independent of the current Android client. Open-data access flags do not
+prove that a location is safe or publicly accessible.

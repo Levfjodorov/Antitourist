@@ -1,32 +1,118 @@
 name: Build Android APK
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      release_signing:
+        description: 'Sign with the permanent release keystore (main only)'
+        type: boolean
+        default: false
 permissions:
   contents: read
+concurrency:
+  group: android-${{ github.event_name }}-${{ github.head_ref || github.ref }}-${{ inputs.release_signing || false }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-java@v4
+      - name: Check release source
+        if: ${{ inputs.release_signing && github.ref != 'refs/heads/main' }}
+        run: |
+          echo '::error::Signed release builds must run from main.'
+          exit 1
+      - name: Test Android build scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Read pinned Flutter version
+        id: flutter-version
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4.0.4
         with:
-           packages: 'platform-tools'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358 cmake;3.22.1'
+          log-accepted-android-sdk-licenses: false
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
           cache: true
       - name: Check Android toolchain
         run: flutter doctor -v
-      - name: Analyze, test, and build APK
+      - name: Analyze, test, and build test APK
+        if: ${{ !inputs.release_signing }}
         run: python3 scripts/build_android.py
-      - uses: actions/upload-artifact@v4
+      - name: Analyze, test, and build signed release APK
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/antitourist-release.jks
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          required = ['ANDROID_KEYSTORE_BASE64', 'ANDROID_STORE_PASSWORD',
+                      'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit('Missing signing secrets: ' + ', '.join(missing))
+          path = Path(os.environ['ANDROID_KEYSTORE_PATH'])
+          path.touch(mode=0o600)
+          path.write_bytes(base64.b64decode(os.environ['ANDROID_KEYSTORE_BASE64'], validate=True))
+          PY
+          python3 scripts/build_android.py --release-signing
+      - name: Check release signing with a disposable CI key
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/antitourist-signing-smoke.jks
+          ANDROID_STORE_PASSWORD: 'ci-test-only'
+          ANDROID_KEY_ALIAS: 'ci-test'
+          ANDROID_KEY_PASSWORD: 'ci-test-only'
+        run: |
+          keytool -genkeypair -noprompt -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storetype JKS -keyalg RSA -keysize 2048 -validity 2 \
+            -alias "$ANDROID_KEY_ALIAS" -dname 'CN=AntiTourist CI Test' \
+            -storepass:env ANDROID_STORE_PASSWORD -keypass:env ANDROID_KEY_PASSWORD
+          python3 scripts/build_android.py --prepare-only --release-signing
+          build/android-project/android/gradlew -p build/android-project/android :app:signingReport
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --ks "$ANDROID_KEYSTORE_PATH" --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_STORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$RUNNER_TEMP/release-signing-smoke.apk" dist/*-test.apk
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from scripts.build_android import ROOT, release_certificate, verify_apk
+
+          metadata = verify_apk(Path(os.environ['RUNNER_TEMP']) / 'release-signing-smoke.apk',
+                                ROOT / 'mobile' / 'pubspec.yaml', release_certificate())
+          print('Disposable signing check: ' + json.dumps(metadata))
+          PY
+      - name: Remove temporary release keystore
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/antitourist-release.jks" "$RUNNER_TEMP/antitourist-signing-smoke.jks" \
+            "$RUNNER_TEMP/release-signing-smoke.apk" "$RUNNER_TEMP/release-signing-smoke.apk.idsig"
+      - uses: actions/upload-artifact@v7.0.2
         with:
-          name: AntiTourist-Android-test
-          path: dist/
+          name: AntiTourist-Android-${{ inputs.release_signing && 'release' || 'test' }}-${{ github.run_number }}
+          path: |
+            dist/*.apk
+            dist/flutter-version.json
+            dist/apk-metadata.json
+            dist/pubspec.lock
+            dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
