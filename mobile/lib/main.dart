@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'external_links.dart';
+import 'location_address.dart';
 import 'app_store.dart';
 import 'my_places_screen.dart';
 import 'language_settings.dart';
@@ -160,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.5.0')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.5.1')),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       Align(alignment: Alignment.centerLeft, child: Image.asset(
         'assets/branding/logo_foreground.png', width: 112, height: 112,
@@ -187,6 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
       Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(tr(context, startLabel, {'distance': accuracyMeters ?? 0}), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          if (startLabel != 'startTallinn') LocationAddress(point: start,
+            key: ValueKey('address-$startLabel')),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             OutlinedButton.icon(onPressed: loading ? null : locate,

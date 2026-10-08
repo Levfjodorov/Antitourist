@@ -55,8 +55,8 @@ class BuildTests(unittest.TestCase):
 
     def test_apk_name_tracks_pubspec_version(self):
         path = self.root / 'pubspec.yaml'
-        path.write_text('name: antitourist\nversion: 0.5.0+8\n')
-        self.assertEqual(builder.apk_filename(path), 'AntiTourist-0.5.0-test.apk')
+        path.write_text('name: antitourist\nversion: 0.5.1+9\n')
+        self.assertEqual(builder.apk_filename(path), 'AntiTourist-0.5.1-test.apk')
         path.write_text('version: invalid\n')
         with self.assertRaises(RuntimeError):
             builder.apk_filename(path)
@@ -66,7 +66,7 @@ class BuildTests(unittest.TestCase):
             path = self.root / 'mobile' / folder
             path.mkdir(parents=True)
             (path / 'new.txt').write_text(folder)
-        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.5.0+8\n')
+        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.5.1+9\n')
         calls = []
 
         def fake_run(flutter, arguments, cwd):
@@ -99,7 +99,7 @@ class BuildTests(unittest.TestCase):
             ['pub', 'get'], ['pub', 'run', 'flutter_launcher_icons'],
             ['analyze'], ['test', '--reporter', 'expanded'], ['build', 'apk', '--release'],
         ])
-        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.5.0-test.apk').is_file())
+        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.5.1-test.apk').is_file())
         self.assertEqual((self.root / 'dist' / 'pubspec.lock').read_text(), 'test lock')
         self.assertEqual((self.root / 'dist' / 'flutter-version.json').read_text(), '{"test":true}')
 

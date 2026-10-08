@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'external_links.dart';
+import 'google_place_links.dart';
 import 'language_settings.dart';
 import 'place_card.dart';
 import 'place_details_service.dart';
@@ -34,6 +35,24 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
       if (mounted) { setState(() => loading = false); }
     }
   }
+  Widget _photo(PlacePhoto photo, String label) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 12),
+      ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(photo.url.toString(),
+        headers: const {'User-Agent': wikimediaUserAgent}, height: 240, width: double.infinity,
+        fit: BoxFit.cover, semanticLabel: label,
+        errorBuilder: (_, error, stack) => SizedBox(height: 100, child: Center(child: Text(tr(context, 'photoError')))),
+        loadingBuilder: (_, child, progress) => progress == null ? child
+          : const SizedBox(height: 240, child: Center(child: CircularProgressIndicator())))),
+      const SizedBox(height: 8),
+      if (photo.caption != null && photo.caption!.isNotEmpty) Text(photo.caption!),
+      Text(photo.credit),
+      Wrap(spacing: 8, children: [
+        TextButton(onPressed: () => openExternal(context, photo.source), child: Text(tr(context, 'photoSource'))),
+        if (photo.licenseUrl != null) TextButton(onPressed: () => openExternal(context, photo.licenseUrl!), child: Text(photo.license))
+        else Text(photo.license),
+      ]),
+    ]);
   @override
   Widget build(BuildContext context) {
     final place = widget.place;
@@ -91,31 +110,33 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
             label: Text(tr(context, loading ? 'detailsLoading' : 'loadDetails'))),
           if (failed) Text(tr(context, 'detailsError')),
           if (info != null) ...[
-            if (photo != null) ...[
-              const SizedBox(height: 12),
-              ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(photo.url.toString(),
-                headers: const {'User-Agent': wikimediaUserAgent}, height: 240, fit: BoxFit.cover, semanticLabel: context.strings.name(place),
-                errorBuilder: (_, error, stack) => SizedBox(height: 100, child: Center(child: Text(tr(context, 'photoError')))),
-                loadingBuilder: (_, child, progress) => progress == null ? child
-                  : const SizedBox(height: 240, child: Center(child: CircularProgressIndicator())))),
-              const SizedBox(height: 8),
-              Text(photo.credit),
-              Wrap(spacing: 8, children: [
-                TextButton(onPressed: () => openExternal(context, photo.source), child: Text(tr(context, 'photoSource'))),
-                if (photo.licenseUrl != null) TextButton(onPressed: () => openExternal(context, photo.licenseUrl!), child: Text(photo.license))
-                else Text(photo.license),
-              ]),
-            ] else Text(tr(context, 'noPhoto')),
+            if (photo != null) _photo(photo, context.strings.name(place))
+            else if (!info.partial) Text(tr(context, 'noPhoto')),
+            if (info.nearbyPhotos.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(tr(context, 'nearbyPhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(tr(context, 'nearbyPhotosHint')),
+              for (final nearby in info.nearbyPhotos) ...[
+                Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
+                _photo(nearby, tr(context, 'nearbyPhotosTitle')),
+              ],
+            ],
             if (info.description != null) ...[
               const SizedBox(height: 12), Text(info.description!),
               Text(tr(context, 'sourceLanguageHint')),
-            ] else Text(tr(context, 'noExtraInfo')),
+            ] else if (!info.partial) Text(tr(context, 'noExtraInfo')),
             if (info.article != null) TextButton.icon(onPressed: () => openExternal(context, info.article!),
               icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'articleSource'))),
             if (info.description != null && info.article?.host.endsWith('.wikipedia.org') == true)
               TextButton(onPressed: () => openExternal(context, Uri.parse('https://en.wikipedia.org/wiki/Wikipedia:Copyrights')),
                 child: Text(tr(context, 'wikipediaLicense'))),
           ],
+          const Divider(height: 32),
+          Text(tr(context, 'googlePhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(tr(context, 'googlePhotosHint')),
+          OutlinedButton.icon(onPressed: () => openExternal(context,
+            googlePlaceSearch(place, context.strings.name(place))), icon: const Icon(Icons.open_in_new),
+            label: Text(tr(context, 'googlePlaceSearch'))),
           const SizedBox(height: 12), Text(tr(context, 'placeDataHint')),
         ],
       ]));

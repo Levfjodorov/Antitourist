@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:antitourist/place_details_service.dart';
 import 'package:antitourist/places.dart';
+import 'package:antitourist/google_place_links.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -60,18 +61,24 @@ void main() {
     expect(calls.every((u) => !u.toString().contains('59.437')), isTrue);
     service.close();
   });
-  test('Unlinked places and brand identifiers do not trigger guessed photo searches', () async {
+  test('Unlinked places use geographic nearby photos without guessed brand or name matches', () async {
     var requests = 0;
-    final service = PlaceDetailsService(client: MockClient((_) async {
-      requests++; return jsonResponse({});
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      requests++;
+      expect(request.url.queryParameters['generator'], 'geosearch');
+      expect(request.url.queryParameters['ggscoord'], '59.437|24.75');
+      return jsonResponse({'query': {'pages': []}});
     }));
     final details = await service.load(linkedPlace({'brand:wikidata': 'Q12',
       'image': 'https://random.example/photo.jpg'}), 'en');
-    expect(details.photo, isNull); expect(requests, 0); service.close();
+    expect(details.photo, isNull); expect(details.nearbyPhotos, isEmpty); expect(requests, 1); service.close();
   });
   test('A partial network failure is reported and permits retry', () async {
     var requests = 0;
-    final service = PlaceDetailsService(client: MockClient((_) async {
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      if (request.url.queryParameters['generator'] == 'geosearch') {
+        return jsonResponse({'query': {'pages': []}});
+      }
       requests++;
       return requests == 1 ? http.Response('unavailable', 503) : jsonResponse(photoFixture());
     }));
@@ -86,4 +93,40 @@ void main() {
     expect(safeWebUrl('javascript:alert(1)'), isNull);
     expect(safeWebUrl('https://user:password@example.com/'), isNull);
   });
+  test('Wikipedia page images work even when the OSM object has no Wikidata tag', () async {
+    var calls = 0;
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      calls++;
+      if (request.url.host == 'en.wikipedia.org') {
+        expect(request.url.queryParameters['prop'], 'extracts|pageimages');
+        return jsonResponse({'query': {'pages': [{'extract': 'Description', 'pageimage': 'Place.jpg'}]}});
+      }
+      expect(request.url.queryParameters['titles'], 'File:Place.jpg');
+      return jsonResponse(photoFixture());
+    }));
+    final details = await service.load(linkedPlace({'wikipedia': 'en:Place'}), 'en');
+    expect(details.photo, isNotNull); expect(details.nearbyPhotos, isEmpty); expect(calls, 2);
+    service.close();
+  });
+  test('Nearby images keep their distance and attribution and reject distant or unlocated files', () {
+    final page = (photoFixture()['query']['pages'] as List).first as Map;
+    Map<String, dynamic> located(int id, double latitude) => {
+      ...Map<String, dynamic>.from(page), 'ns': 6, 'pageid': id,
+      'coordinates': [{'lat': latitude, 'lon': 24.7536, 'globe': 'earth'}],
+    };
+    final result = parseNearbyPhotos({'query': {'pages': [
+      {'ns': 6}, located(1, 60), located(2, 59.4371),
+    ]}}, tallinnStart);
+    expect(result.length, 1); expect(result.single.nearbyMeters, closeTo(11.1, 1));
+    expect(result.single.credit, 'Photo Author'); expect(result.single.license, 'CC BY-SA 4.0');
+  });
+  test('Google Maps links encode names and addresses without API keys', () {
+    final uri = googlePlaceSearch(linkedPlace({'addr:street': 'Pikk', 'addr:housenumber': '1',
+      'addr:city': 'Tallinn'}), 'Место & café');
+    expect(uri.host, 'www.google.com'); expect(uri.queryParameters['api'], '1');
+    expect(uri.queryParameters['query'], 'Место & café, Pikk, 1, Tallinn');
+    expect(uri.queryParameters.containsKey('key'), isFalse);
+    expect(googlePlaceSearch(linkedPlace({}), 'Place').queryParameters['query'], contains('59.437000,24.750000'));
+  });
+
 }

@@ -3,20 +3,23 @@ import 'package:html/parser.dart' show parseFragment;
 import 'package:http/http.dart' as http;
 import 'places.dart';
 
-const wikimediaUserAgent = 'AntiTourist/0.5 (https://github.com/Levfjodorov/Antitourist)';
+const wikimediaUserAgent = 'AntiTourist/0.5.1 (https://github.com/Levfjodorov/Antitourist)';
 
 class PlacePhoto {
   const PlacePhoto({required this.url, required this.source, required this.credit,
-    required this.license, this.licenseUrl});
+    required this.license, this.licenseUrl, this.caption, this.nearbyMeters});
   final Uri url, source;
   final String credit, license;
   final Uri? licenseUrl;
+  final String? caption;
+  final double? nearbyMeters;
 }
 class PlaceDetails {
-  const PlaceDetails({this.description, this.article, this.photo, this.partial = false});
+  const PlaceDetails({this.description, this.article, this.photo, this.nearbyPhotos = const [], this.partial = false});
   final String? description;
   final Uri? article;
   final PlacePhoto? photo;
+  final List<PlacePhoto> nearbyPhotos;
   final bool partial;
 }
 
@@ -45,7 +48,34 @@ PlacePhoto? parseCommonsPhoto(Map<String, dynamic> data) {
       !['image/jpeg', 'image/png', 'image/webp'].contains(info['thumbmime'] ?? info['mime']) ||
       (field('Artist').isEmpty && attribution.isEmpty) || credit.isEmpty || license.isEmpty) { return null; }
   return PlacePhoto(url: url, source: source, credit: credit, license: license,
-    licenseUrl: safeWebUrl(field('LicenseUrl')));
+    licenseUrl: safeWebUrl(field('LicenseUrl')), caption: field('ImageDescription'));
+}
+
+List<PlacePhoto> parseNearbyPhotos(Map<String, dynamic> data, GeoPoint origin) {
+  final pages = data['query']?['pages'];
+  if (pages is! List || !origin.valid) { return const []; }
+  final result = <PlacePhoto>[];
+  final seen = <String>{};
+  for (final raw in pages) {
+    try {
+      if (raw is! Map || raw['ns'] != 6) { continue; }
+      final coordinates = raw['coordinates'];
+      if (coordinates is! List || coordinates.isEmpty) { continue; }
+      final coordinate = coordinates.first;
+      if (coordinate['globe'] != 'earth' || coordinate['lat'] is! num || coordinate['lon'] is! num) { continue; }
+      final point = GeoPoint((coordinate['lat'] as num).toDouble(), (coordinate['lon'] as num).toDouble());
+      if (!point.valid) { continue; }
+      final distance = distanceMeters(origin, point);
+      if (distance > 150) { continue; }
+      final photo = parseCommonsPhoto({'query': {'pages': [raw]}});
+      if (photo == null || !seen.add(photo.source.toString())) { continue; }
+      result.add(PlacePhoto(url: photo.url, source: photo.source, credit: photo.credit,
+        license: photo.license, licenseUrl: photo.licenseUrl, caption: photo.caption,
+        nearbyMeters: distance));
+    } catch (_) { /* One malformed file should not hide other valid photos. */ }
+  }
+  result.sort((a, b) => a.nearbyMeters!.compareTo(b.nearbyMeters!));
+  return result.take(3).toList();
 }
 
 class PlaceDetailsService {
@@ -79,6 +109,10 @@ class PlaceDetailsService {
       final uri = safeWebUrl(image);
       if (uri != null && uri.host == 'commons.wikimedia.org' && uri.path.startsWith('/wiki/File:')) {
         filename = Uri.decodeComponent(uri.path.substring('/wiki/File:'.length));
+      } else if (uri != null && uri.host == 'upload.wikimedia.org' &&
+          uri.path.startsWith('/wikipedia/commons/')) {
+        final pieces = uri.pathSegments;
+        if (pieces.length >= 5) { filename = pieces[2] == 'thumb' ? pieces[pieces.length - 2] : pieces.last; }
       }
     }
     final wikipedia = place.tags['wikipedia:$language'] ?? place.tags['wikipedia'];
@@ -112,12 +146,14 @@ class PlaceDetailsService {
       article = Uri.https('$articleLanguage.wikipedia.org', '/wiki/${title.replaceAll(' ', '_')}');
       try {
         final data = await _get(Uri.https('$articleLanguage.wikipedia.org', '/w/api.php', {
-          'action': 'query', 'format': 'json', 'formatversion': '2', 'prop': 'extracts',
+          'action': 'query', 'format': 'json', 'formatversion': '2', 'prop': 'extracts|pageimages', 'piprop': 'name', 'pilicense': 'free',
           'exintro': '1', 'explaintext': '1', 'exchars': '1000', 'redirects': '1', 'titles': title,
         }));
         final pages = data['query']?['pages'];
         final extract = pages is List && pages.isNotEmpty ? pages.first['extract'] : null;
         if (extract is String && extract.trim().isNotEmpty) { summary = extract.trim(); }
+        final pageImage = pages is List && pages.isNotEmpty ? pages.first['pageimage'] : null;
+        if (filename == null && pageImage is String && pageImage.isNotEmpty) { filename = pageImage; }
       } catch (_) { failed = true; }
     }
     PlacePhoto? photo;
@@ -130,7 +166,21 @@ class PlaceDetailsService {
         photo = parseCommonsPhoto(data);
       } catch (_) { failed = true; }
     }
-    final result = PlaceDetails(description: summary, article: article, photo: photo, partial: failed);
+    var nearby = <PlacePhoto>[];
+    if (photo == null && place.point.valid) {
+      try {
+        final data = await _get(Uri.https('commons.wikimedia.org', '/w/api.php', {
+          'action': 'query', 'format': 'json', 'formatversion': '2',
+          'generator': 'geosearch', 'ggsnamespace': '6',
+          'ggscoord': '${place.lat}|${place.lon}', 'ggsradius': '150', 'ggslimit': '8',
+          'prop': 'imageinfo|coordinates', 'coprimary': 'primary',
+          'iiprop': 'url|mime|extmetadata', 'iiurlwidth': '640',
+        }));
+        nearby = parseNearbyPhotos(data, place.point);
+      } catch (_) { failed = true; }
+    }
+    final result = PlaceDetails(description: summary, article: article, photo: photo,
+      nearbyPhotos: nearby, partial: failed);
     if (!failed) {
       if (_cache.length >= 30) { _cache.remove(_cache.keys.first); }
       _cache[key] = result;
