@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILD_TOOLS_VERSION = '36.0.0'
 SIGNING_START = '    // BEGIN ANTITOURIST RELEASE SIGNING\n'
 SIGNING_END = '    // END ANTITOURIST RELEASE SIGNING\n'
 
@@ -151,32 +152,24 @@ def apk_filename(pubspec: Path, release: bool = False) -> str:
 
 
 def android_tool(name: str) -> str:
-    found = shutil.which(name)
-    if found:
-        return found
     suffix = ('.bat' if name == 'apksigner' else '.exe') if sys.platform == 'win32' else ''
     for variable in ['ANDROID_HOME', 'ANDROID_SDK_ROOT']:
         if not os.environ.get(variable):
             continue
-        build_tools = Path(os.environ[variable]) / 'build-tools'
-        if not build_tools.is_dir():
-            continue
-        versions = sorted((p for p in build_tools.iterdir() if re.fullmatch(r'\d+\.\d+\.\d+', p.name)),
-                          key=lambda p: tuple(map(int, p.name.split('.'))), reverse=True)
-        for version in versions:
-            tool = version / (name + suffix)
-            if tool.is_file():
-                return str(tool)
-    raise RuntimeError('Android build-tools are missing ' + name + '; check ANDROID_HOME')
+        tool = Path(os.environ[variable]) / 'build-tools' / BUILD_TOOLS_VERSION / (name + suffix)
+        if tool.is_file():
+            return str(tool)
+    raise RuntimeError('Android build-tools ' + BUILD_TOOLS_VERSION + ' are missing ' + name +
+                       '; install the pinned build-tools and check ANDROID_HOME')
 
 
 def verify_apk(apk: Path, pubspec: Path, certificate: str | None) -> dict:
     signing = subprocess.check_output(tool_command(android_tool('apksigner'),
         ['verify', '--verbose', '--print-certs', str(apk)]), text=True)
-    signers = re.findall(r'^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$',
+    signers = re.findall(r'^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$',
                         signing, flags=re.MULTILINE)
     if len(signers) != 1:
-        raise RuntimeError('Expected exactly one verified APK signer')
+        raise RuntimeError('Expected exactly one verified APK signer; apksigner output:\n' + signing)
     signer = signers[0].lower()
     debug = bool(re.search(r'^Signer #\d+ certificate DN:.*\bCN=Android Debug\b',
                            signing, flags=re.MULTILINE))

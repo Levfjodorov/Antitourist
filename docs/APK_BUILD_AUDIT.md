@@ -61,6 +61,7 @@ required. The disposable key and APK were removed after this check.
 | Java, Android setup and artifact actions used deprecated Node 20 versions | Update to verified Node 24 action releases |
 | All APKs used a temporary debug certificate | Add opt-in permanent signing with required secrets, main-only source guard and signer-certificate verification |
 | Release-mode compilation alone did not prove package correctness | Verify APK signature, ID, versionCode/name, minSdk, release mode and permissions; produce metadata and SHA256SUMS |
+| PR build #14 compiled the APK but exposed dependence on the runner's newer APK-inspection tools | Resolve apksigner/aapt only from pinned build-tools 36.0.0; cover newer preinstalled tools with a regression test |
 | Template replacement could silently do nothing | Reject unknown Gradle templates; regenerate Android scaffolding with the pinned Flutter version |
 | Reused dist could contain older APKs | Replace previous generated AntiTourist APKs only after a new package passes verification |
 

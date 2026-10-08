@@ -2,6 +2,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -177,6 +178,20 @@ class BuildTests(unittest.TestCase):
     def test_missing_android_build_tools_are_reported(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(builder.shutil, 'which', return_value=None):
             with self.assertRaisesRegex(RuntimeError, 'missing apksigner'):
+                builder.android_tool('apksigner')
+
+    def test_android_inspection_uses_pinned_tools_even_when_newer_tools_exist(self):
+        filename = 'apksigner.bat' if sys.platform == 'win32' else 'apksigner'
+        pinned = self.root / 'build-tools' / '36.0.0' / filename
+        newer = self.root / 'build-tools' / '37.0.0' / filename
+        for path in [pinned, newer]:
+            path.parent.mkdir(parents=True)
+            path.write_text('test tool placeholder')
+        with patch.dict(os.environ, {'ANDROID_HOME': str(self.root), 'ANDROID_SDK_ROOT': ''}), \
+             patch.object(builder.shutil, 'which', return_value='/unrelated/tool/on/PATH'):
+            self.assertEqual(builder.android_tool('apksigner'), str(pinned))
+            pinned.unlink()
+            with self.assertRaisesRegex(RuntimeError, '36.0.0 are missing apksigner'):
                 builder.android_tool('apksigner')
 
     def test_pipeline_refreshes_sources_runs_checks_before_build_and_copies_artifacts(self):
