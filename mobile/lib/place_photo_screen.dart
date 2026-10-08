@@ -7,8 +7,7 @@ import 'place_photo_image.dart';
 class PlacePhotoScreen extends StatefulWidget {
   const PlacePhotoScreen({super.key, required this.photos,
     required this.placeName, this.initialIndex = 0})
-      : assert(photos.isNotEmpty),
-        assert(initialIndex >= 0 && initialIndex < photos.length);
+      : assert(initialIndex >= 0);
 
   final List<PlacePhoto> photos;
   final String placeName;
@@ -27,6 +26,8 @@ class _PlacePhotoScreenState extends State<PlacePhotoScreen> {
   @override
   void initState() {
     super.initState();
+    assert(widget.photos.isNotEmpty);
+    assert(widget.initialIndex < widget.photos.length);
     index = widget.initialIndex;
     pages = PageController(initialPage: index);
     zooms = List.generate(widget.photos.length, (_) => TransformationController()
