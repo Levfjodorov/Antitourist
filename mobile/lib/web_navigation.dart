@@ -29,6 +29,8 @@ Uri? intentWebFallback(String url) {
     return uri != null && isWebPage(uri) ? webPageUri(uri) : null;
   } on FormatException {
     return null;
+  } on ArgumentError {
+    return null;
   }
 }
 
