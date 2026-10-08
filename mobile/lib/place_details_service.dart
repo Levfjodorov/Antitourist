@@ -3,7 +3,7 @@ import 'package:html/parser.dart' show parseFragment;
 import 'package:http/http.dart' as http;
 import 'places.dart';
 
-const wikimediaUserAgent = 'AntiTourist/0.5.1 (https://github.com/Levfjodorov/Antitourist)';
+const wikimediaUserAgent = 'AntiTourist/0.5.2 (https://github.com/Levfjodorov/Antitourist)';
 
 class PlacePhoto {
   const PlacePhoto({required this.url, required this.source, required this.credit,
@@ -161,7 +161,7 @@ class PlaceDetailsService {
       try {
         final data = await _get(Uri.https('commons.wikimedia.org', '/w/api.php', {
           'action': 'query', 'format': 'json', 'formatversion': '2', 'prop': 'imageinfo',
-          'iiprop': 'url|mime|extmetadata', 'iiurlwidth': '640', 'titles': 'File:$filename',
+          'iiprop': 'url|mime|extmetadata', 'iiurlwidth': '1280', 'titles': 'File:$filename',
         }));
         photo = parseCommonsPhoto(data);
       } catch (_) { failed = true; }
@@ -174,7 +174,7 @@ class PlaceDetailsService {
           'generator': 'geosearch', 'ggsnamespace': '6',
           'ggscoord': '${place.lat}|${place.lon}', 'ggsradius': '150', 'ggslimit': '8',
           'prop': 'imageinfo|coordinates', 'coprimary': 'primary',
-          'iiprop': 'url|mime|extmetadata', 'iiurlwidth': '640',
+          'iiprop': 'url|mime|extmetadata', 'iiurlwidth': '1280',
         }));
         nearby = parseNearbyPhotos(data, place.point);
       } catch (_) { failed = true; }
