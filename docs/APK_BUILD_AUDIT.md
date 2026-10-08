@@ -23,10 +23,20 @@ Its downloaded ZIP matches the GitHub artifact SHA-256:
 | Certificate SHA-256 | `ebb13f1d2ee043d4c64923dccd805bb5804e70a628228c45b3a3b3f1105a4771` |
 | Native ABIs | `armeabi-v7a`, `arm64-v8a`, `x86_64` |
 | Flutter / Dart | 3.47.6 / 3.13.5 |
+| Application ID | `com.antitourist.antitourist` |
+| Version name / code | `0.5.1` / `9` |
+| Minimum Android SDK | 24 (Android 7.0) |
+| Required permissions | INTERNET, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION |
 
 The ZIP contains the APK, `flutter-version.json`, and `pubspec.lock`. Its lockfile
 requires Dart >=3.12.0 and Flutter >=3.44.0. The lockfile is committed unchanged
 as `mobile/pubspec.lock` in the proposed fixes.
+
+The downloaded APK passes Android build-tools 36.0.0 `apksigner verify` and
+`aapt dump badging`, including the new package-verification function. A locally
+re-signed copy with a disposable keystore also passes the release-certificate
+check; the original debug APK is rejected when that release certificate is
+required. The disposable key and APK were removed after this check.
 
 ## Historical failures already fixed upstream
 
@@ -45,6 +55,7 @@ as `mobile/pubspec.lock` in the proposed fixes.
 | README and Android guide still described 0.1.1 and unexecuted builds | Record verified 0.5.0/0.5.1 builds and distinguish compilation from device validation |
 | Flutter `stable`, Ubuntu `latest`, and uncommitted dependency resolution could drift | Pin Flutter 3.47.6 and Ubuntu 24.04; commit the known-good lockfile; use `--enforce-lockfile` and `--no-pub` |
 | SDK constraints advertised Dart 3.6 although actual dependencies require 3.12 | Align pubspec SDK constraints with the verified lockfile |
+| Raising the language version enabled two constructor lints in PR build #13 | Use Dart 3.12 private initializing formals in LanguageSettings, preserving public parameter names |
 | SDK setup only requested platform-tools | Explicitly install API 36, build-tools 36.0.0, NDK 28.2.13676358 and CMake 3.22.1 matching the pinned Flutter toolchain |
 | Workflow was manual-only and skipped Python build-script tests | Run on pull requests and main pushes; run build-script tests before APK compilation |
 | Java, Android setup and artifact actions used deprecated Node 20 versions | Update to verified Node 24 action releases |

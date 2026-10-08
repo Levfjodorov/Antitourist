@@ -85,6 +85,13 @@ jobs:
             -alias "$ANDROID_KEY_ALIAS" -dname 'CN=AntiTourist CI Test' \
             -storepass:env ANDROID_STORE_PASSWORD -keypass:env ANDROID_KEY_PASSWORD
           python3 scripts/build_android.py --prepare-only --release-signing
+          python3 - <<'PY'
+          import shutil
+          from scripts.build_android import ROOT, run
+
+          run(shutil.which('flutter'), ['pub', 'get', '--enforce-lockfile'],
+              ROOT / 'build' / 'android-project')
+          PY
           build/android-project/android/gradlew -p build/android-project/android :app:signingReport
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
             --ks "$ANDROID_KEYSTORE_PATH" --ks-key-alias "$ANDROID_KEY_ALIAS" \
