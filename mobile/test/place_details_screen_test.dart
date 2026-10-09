@@ -164,7 +164,7 @@ void main() {
     expect(service.calls.length, 2);
     service.calls.last.result.complete(const PlaceDetails());
     await tester.pumpAndSettle();
-    expect(find.text('История этого места пока отсутствует в связанных источниках.'), findsOneWidget);
+    expect(find.text('Не удалось найти статью об этом месте в Wikipedia или связанных источниках.'), findsOneWidget);
     expect(retry, findsNothing); expect(tester.takeException(), isNull);
   });
   testWidgets('A late network response after closing the card does not update a disposed screen', (tester) async {
