@@ -1,6 +1,16 @@
 // Complete UI catalogue: Russian, Estonian, English (AppLanguage order).
 const translations = <String, List<String>>{
-  "wikipediaAttribution": ["Wikipedia: «{title}» · язык: {language}. Авторы Wikipedia · CC BY-SA 4.0. Текст показан без исходного оформления.", "Wikipedia: „{title}“ · keel: {language}. Wikipedia autorid · CC BY-SA 4.0. Tekst on esitatud algse vorminduseta.", "Wikipedia: “{title}” · language: {language}. Wikipedia contributors · CC BY-SA 4.0. Original text formatting has been removed."],
+  "translationAccuracy": ["Автоматический перевод может содержать неточности. Для проверки открой оригинал.", "Automaattõlkes võib olla ebatäpsusi. Kontrollimiseks ava originaal.", "Automatic translation may contain inaccuracies. Check the original when needed."],
+  "showTranslation": ["Показать перевод", "Näita tõlget", "Show translation"],
+  "showOriginal": ["Показать оригинал", "Näita originaali", "Show original"],
+  "translationOriginal": ["Оригинальный текст · {source}.", "Algtekst · {source}.", "Original text · {source}."],
+  "translationAutomatic": ["Автоматический перевод Google Translate: {source} → {target}.", "Google Translate’i automaattõlge: {source} → {target}.", "Automatic translation by Google Translate: {source} → {target}."],
+  "retryTranslation": ["Повторить перевод с Google", "Proovi Google’i tõlget uuesti", "Retry translation with Google"],
+  "translationMobileData": ["Перевести с Google · разрешить мобильный интернет", "Tõlgi Google’iga · luba mobiilne internet", "Translate with Google · allow mobile data"],
+  "translationDownloadHint": ["При первом переводе нужны языковые пакеты: около 30 МБ каждый. Автоматическая загрузка — через Wi-Fi; после неё перевод работает на телефоне без интернета.", "Esimeseks tõlkeks on vaja keelepakette: umbes 30 MB igaüks. Need laaditakse automaatselt Wi-Fi kaudu; pärast seda töötab tõlge telefonis internetita.", "The first translation needs language packs, around 30 MB each. Automatic downloads use Wi-Fi; afterward translation runs on your phone offline."],
+  "translationError": ["Перевод пока недоступен. Исходный текст сохранён.", "Tõlge pole praegu saadaval. Algtekst on alles.", "Translation is unavailable for now. The original text is kept."],
+  "translationLoading": ["Готовим автоматический перевод… Пока показан оригинал.", "Valmistame automaattõlget… Praegu kuvatakse originaal.", "Preparing automatic translation… The original is shown for now."],
+  "wikipediaAttribution": ["Wikipedia: «{title}» · язык оригинала: {language}. Авторы Wikipedia · CC BY-SA 4.0. Текст показан без исходного оформления.", "Wikipedia: „{title}“ · algkeel: {language}. Wikipedia autorid · CC BY-SA 4.0. Tekst on esitatud algse vorminduseta.", "Wikipedia: “{title}” · original language: {language}. Wikipedia contributors · CC BY-SA 4.0. Original text formatting has been removed."],
   "articleTruncated": ["Показана сокращённая версия текста статьи.", "Kuvatakse artikli teksti lühendatud versioon.", "A shortened version of the article text is shown."],
   "retryDetails": ["Повторить загрузку фото и истории", "Laadi fotod ja ajalugu uuesti", "Retry photos and history"],
   "openPhoto": ["На весь экран", "Ava täisekraanil", "View full screen"],

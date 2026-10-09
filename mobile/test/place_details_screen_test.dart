@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:antitourist/language_settings.dart';
 import 'package:antitourist/place_details_screen.dart';
 import 'package:antitourist/place_details_service.dart';
+import 'package:antitourist/place_translation_service.dart';
 import 'package:antitourist/places.dart';
 import 'package:antitourist/strings.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,83 @@ class DeferredDetailsService extends PlaceDetailsService {
   }
 }
 
+class DeferredTranslator implements PlaceTextTranslator {
+  final calls = <({String target, bool mobile, Completer<TranslatedPlaceText> result})>[];
+  @override
+  Future<TranslatedPlaceText> translate(PlaceDetails original, String targetLanguage,
+      {bool allowMobileData = false}) {
+    final result = Completer<TranslatedPlaceText>();
+    calls.add((target: targetLanguage, mobile: allowMobileData, result: result));
+    return result.future;
+  }
+}
+
 void main() {
+  const source = PlaceDetails(articleTitle: 'Monument', textLanguage: 'et',
+    description: 'Avatud 1928. aastal.', sections: [PlaceArticleSection('Ajalugu', 'Taastatud 2009. aastal.')]);
+  const translated = TranslatedPlaceText(title: 'Памятник', description: 'Открыт в 1928 году.',
+    sections: [PlaceArticleSection('История памятника', 'Восстановлен в 2009 году.')]);
+  testWidgets('Foreign article translates into the app language automatically and the original toggle needs no new request', (tester) async {
+    final service = DeferredDetailsService();
+    final translator = DeferredTranslator();
+    await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
+      place: routePlaces.first, demo: false, service: service, translator: translator)));
+    service.calls.single.result.complete(source);
+    await tester.pump();
+    expect(translator.calls.single.target, 'ru'); expect(translator.calls.single.mobile, isFalse);
+    expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
+    translator.calls.single.result.complete(translated);
+    await tester.pumpAndSettle();
+    final scroll = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Открыт в 1928 году.'), 150, scrollable: scroll);
+    expect(find.text('История памятника'), findsOneWidget);
+    final toggle = find.byKey(const ValueKey('toggle-original-text'));
+    await tester.ensureVisible(toggle); await tester.tap(toggle); await tester.pumpAndSettle();
+    expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
+    await tester.ensureVisible(toggle); await tester.tap(toggle); await tester.pumpAndSettle();
+    expect(find.text('Открыт в 1928 году.'), findsOneWidget);
+    expect(translator.calls.length, 1); expect(service.calls.length, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('Translation failure keeps the original and mobile-data retry ignores the older result', (tester) async {
+    final service = DeferredDetailsService();
+    final translator = DeferredTranslator();
+    await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
+      place: routePlaces.first, demo: false, service: service, translator: translator)));
+    service.calls.single.result.complete(source); await tester.pump();
+    final mobile = find.byKey(const ValueKey('translation-mobile-data'));
+    await tester.ensureVisible(mobile); await tester.tap(mobile); await tester.pump();
+    expect(translator.calls.last.mobile, isTrue);
+    translator.calls.last.result.completeError(StateError('Model unavailable'));
+    await tester.pumpAndSettle();
+    expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('retry-translation')), findsOneWidget);
+    translator.calls.first.result.complete(translated); await tester.pumpAndSettle();
+    expect(find.text('Открыт в 1928 году.'), findsNothing);
+    final retry = find.byKey(const ValueKey('retry-translation'));
+    await tester.ensureVisible(retry); await tester.tap(retry); await tester.pump();
+    translator.calls.last.result.complete(translated); await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('retry-translation')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('Changing language or closing the card discards a pending translation', (tester) async {
+    final settings = LanguageSettings(); addTearDown(settings.dispose);
+    final service = DeferredDetailsService();
+    final translator = DeferredTranslator();
+    await tester.pumpWidget(LanguageScope(settings: settings, child: MaterialApp(home: PlaceDetailsScreen(
+      place: routePlaces.first, demo: false, service: service, translator: translator))));
+    service.calls.single.result.complete(source); await tester.pump();
+    await settings.select(AppLanguage.et); await tester.pump();
+    service.calls.last.result.complete(source); await tester.pumpAndSettle();
+    translator.calls.single.result.complete(translated); await tester.pumpAndSettle();
+    expect(find.text('Открыт в 1928 году.'), findsNothing);
+    expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
+    await settings.select(AppLanguage.ru); await tester.pump();
+    service.calls.last.result.complete(source); await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    translator.calls.last.result.complete(translated); await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('Opening a place loads history automatically and ignores an older language response', (tester) async {
     final settings = LanguageSettings();
     addTearDown(settings.dispose);

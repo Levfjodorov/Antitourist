@@ -1,6 +1,6 @@
 name: antitourist
 publish_to: 'none'
-version: 0.5.5+13
+version: 0.5.6+14
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -21,6 +21,7 @@ dependencies:
   geocoding: ^5.0.0
   url_launcher: ^6.3.3
   webview_flutter: 4.14.1
+  google_mlkit_translation: 0.15.1
 
 dev_dependencies:
   webview_flutter_platform_interface: 2.15.1
@@ -35,6 +36,7 @@ flutter:
   assets:
     - assets/demo_places.json
     - assets/branding/logo_foreground.png
+    - assets/branding/google_logo.png
 
 flutter_launcher_icons:
   android: true

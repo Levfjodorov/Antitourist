@@ -40,7 +40,16 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
-## Android 0.5.5
+## Android 0.5.6
+
+Version 0.5.6 translates linked article introductions, section headings and text
+into the selected app language with Google Translate on-device models (ML Kit).
+The original remains available through a toggle. Language models download over
+Wi-Fi by default; a clearly labeled button allows mobile data. Once downloaded,
+translation runs offline without sending the article text to a translation server.
+Machine translations are labeled and include Google attribution. See the
+[translation documentation](https://developers.google.com/ml-kit/language/translation)
+and [Google Translate information](https://cloud.google.com/translate).
 
 Version 0.5.5 loads photos and linked Wikipedia text automatically when a place
 card opens. The native card shows article sections, including available history,
@@ -80,8 +89,8 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.5-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.5-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.5.6-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.6-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,

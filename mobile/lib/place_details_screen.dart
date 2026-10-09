@@ -6,13 +6,15 @@ import 'place_card.dart';
 import 'place_details_service.dart';
 import 'place_photo_image.dart';
 import 'place_photo_screen.dart';
+import 'place_translation_service.dart';
 import 'places.dart';
 
 class PlaceDetailsScreen extends StatefulWidget {
-  const PlaceDetailsScreen({super.key, required this.place, required this.demo, this.service});
+  const PlaceDetailsScreen({super.key, required this.place, required this.demo, this.service, this.translator});
   final Place place;
   final bool demo;
   final PlaceDetailsService? service;
+  final PlaceTextTranslator? translator;
   @override
   State<PlaceDetailsScreen> createState() => _PlaceDetailsScreenState();
 }
@@ -22,6 +24,8 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   bool loading = false, failed = false;
   String? loadedLanguage;
   int request = 0;
+  TranslatedPlaceText? translated;
+  bool translating = false, translationFailed = false, showOriginal = false;
   @override
   void initState() { super.initState(); service = widget.service ?? PlaceDetailsService.shared; }
   @override
@@ -38,15 +42,54 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   Future<void> _load() async {
     final language = context.strings.language.code;
     final currentRequest = ++request;
-    setState(() { loading = true; failed = false; details = null; loadedLanguage = language; });
+    setState(() {
+      loading = true; failed = false; details = null; loadedLanguage = language;
+      translated = null; translating = false; translationFailed = false; showOriginal = false;
+    });
     try {
       final result = await service.load(widget.place, language);
-      if (mounted && currentRequest == request) { setState(() { details = result; failed = result.partial; }); }
+      if (mounted && currentRequest == request) {
+        setState(() { details = result; failed = result.partial; loading = false; });
+        if (result.textLanguage != null && result.textLanguage != language &&
+            (result.description != null || result.sections.isNotEmpty)) {
+          await _translate(result, language, currentRequest);
+        }
+      }
     } catch (_) {
       if (mounted && currentRequest == request) { setState(() => failed = true); }
     } finally {
       if (mounted && currentRequest == request) { setState(() => loading = false); }
     }
+  }
+  Future<void> _translate(PlaceDetails original, String language, int currentRequest,
+      {bool allowMobileData = false}) async {
+    setState(() { translating = true; translationFailed = false; });
+    try {
+      final result = await (widget.translator ?? PlaceTranslationService.shared)
+        .translate(original, language, allowMobileData: allowMobileData);
+      if (mounted && currentRequest == request) {
+        setState(() { translated = result; showOriginal = false; });
+      }
+    } catch (_) {
+      if (mounted && currentRequest == request) { setState(() => translationFailed = true); }
+    } finally {
+      if (mounted && currentRequest == request) { setState(() => translating = false); }
+    }
+  }
+  void _retryTranslation({bool allowMobileData = false}) {
+    final original = details;
+    if (original != null) {
+      _translate(original, context.strings.language.code, ++request, allowMobileData: allowMobileData);
+    }
+  }
+  String _displayName(PlaceDetails? info) {
+    final original = context.strings.name(widget.place);
+    final title = translated?.title;
+    String normalize(String value) => value.replaceAll('_', ' ').trim().toLowerCase();
+    if (!showOriginal && title != null && info?.articleTitle != null &&
+        widget.place.tags['name:${context.strings.language.code}'] == null &&
+        normalize(original) == normalize(info!.articleTitle!)) { return title; }
+    return original;
   }
   void _openPhoto(PlacePhoto photo, List<PlacePhoto> photos) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PlacePhotoScreen(
@@ -84,10 +127,41 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
       if (photo != null) _photo(photo, context.strings.name(widget.place), photos)
       else if (!info.partial) Padding(padding: const EdgeInsets.only(top: 12),
         child: Text(tr(context, 'noPhoto'))),
-      if (info.description != null) ...[
-        const SizedBox(height: 16), SelectableText(info.description!),
+      if (translating || translationFailed) ...[
+        const SizedBox(height: 12),
+        Text(tr(context, translating ? 'translationLoading' : 'translationError')),
+        if (translating) const LinearProgressIndicator(),
+        Text(tr(context, 'translationDownloadHint'), style: Theme.of(context).textTheme.bodySmall),
+        Wrap(spacing: 8, children: [
+          if (translationFailed) TextButton.icon(key: const ValueKey('retry-translation'),
+            onPressed: _retryTranslation, icon: const Icon(Icons.refresh),
+            label: Text(tr(context, 'retryTranslation'))),
+          TextButton.icon(key: const ValueKey('translation-mobile-data'),
+            onPressed: () => _retryTranslation(allowMobileData: true),
+            icon: const Icon(Icons.download), label: Text(tr(context, 'translationMobileData'))),
+        ]),
       ],
-      for (final section in info.sections) ...[
+      if (translated != null) ...[
+        const SizedBox(height: 12),
+        Text(tr(context, showOriginal ? 'translationOriginal' : 'translationAutomatic', {
+          'source': info.textLanguage ?? '—', 'target': context.strings.language.code,
+        })),
+        if (!showOriginal) Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Semantics(label: 'powered by Google Translate', child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+              const Text('powered by'),
+              Image.asset('assets/branding/google_logo.png', height: 20, semanticLabel: 'Google'),
+              const Text('Translate'),
+            ]))),
+        TextButton(key: const ValueKey('toggle-original-text'),
+          onPressed: () => setState(() => showOriginal = !showOriginal),
+          child: Text(tr(context, showOriginal ? 'showTranslation' : 'showOriginal'))),
+        if (!showOriginal) Text(tr(context, 'translationAccuracy'),
+      ],
+      if ((!showOriginal ? translated?.description : null) ?? info.description case final description?) ...[
+        const SizedBox(height: 16), SelectableText(description),
+      ],
+      for (final section in (!showOriginal ? translated?.sections : null) ?? info.sections) ...[
         const SizedBox(height: 16),
         Text(section.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8), SelectableText(section.text),
@@ -147,7 +221,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     return Scaffold(appBar: AppBar(title: Text(tr(context, 'placeDetails')), actions: const [LanguageMenu()]),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: Text(context.strings.name(place), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
+          Expanded(child: Text(_displayName(info), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
           FavoriteButton(place: place),
         ]),
         Text(context.strings.category(place.category)),
