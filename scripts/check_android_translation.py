@@ -1,38 +1,66 @@
-"""Install the separate smoke APK and require an actual native Russian translation."""
+"""Install the smoke APK and require a real native translation and photo plugin."""
 import json
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-package = 'com.antitourist.antitourist'
-marker = 'ANTITOURIST_TRANSLATION_RESULT='
-apk = Path(sys.argv[1]).resolve()
-subprocess.run(['adb', 'install', '-r', str(apk)], check=True)
-subprocess.run(['adb', 'logcat', '-c'], check=True)
-subprocess.run(['adb', 'shell', 'svc', 'wifi', 'enable'], check=True)
-subprocess.run(['adb', 'shell', 'svc', 'data', 'enable'], check=True)
-time.sleep(3)
-subprocess.run(['adb', 'shell', 'am', 'start', '-n', package + '/.MainActivity'], check=True)
-deadline = time.monotonic() + 720
-while time.monotonic() < deadline:
-    logs = subprocess.check_output(['adb', 'logcat', '-d', '-v', 'brief'], text=True, errors='replace')
+PACKAGE = 'com.antitourist.antitourist'
+MARKER = 'ANTITOURIST_TRANSLATION_RESULT='
+
+
+def adb_command(*arguments: str) -> list[str]:
+    # Address the emulator explicitly, including after ADB reconnects.
+    return ['adb', '-s', os.environ.get('ANDROID_SERIAL', 'emulator-5554'), *arguments]
+
+
+def read_logs(*arguments: str, attempts: int = 5) -> str:
+    last_error = ''
+    for attempt in range(attempts):
+        result = subprocess.run(adb_command('logcat', '-d', '-v', 'brief', *arguments),
+            text=True, errors='replace', capture_output=True, timeout=25)
+        if result.returncode == 0:
+            return result.stdout
+        last_error = result.stderr or result.stdout or str(result.returncode)
+        print('ADB log read failed temporarily: ' + last_error[-1000:], flush=True)
+        if attempt + 1 < attempts:
+            subprocess.run(adb_command('wait-for-device'), timeout=20, check=False,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(2)
+    raise RuntimeError('ADB log reading did not recover: ' + last_error[-1000:])
+
+
+def result_from_logs(logs: str) -> dict | None:
     for line in logs.splitlines():
-        if marker in line:
-            result = json.loads(line.split(marker, 1)[1])
-            print(json.dumps(result, ensure_ascii=False), flush=True)
-            if result['ok']:
-                raise SystemExit(0)
-            # Keep startup registration failures; emulator system logs can push
-            # them out of a small tail within seconds.
-            pid = subprocess.check_output(['adb', 'shell', 'pidof', package], text=True).strip()
-            if pid:
-                app_logs = subprocess.check_output(['adb', 'logcat', '-d', '--pid=' + pid, '-v', 'brief'],
-                    text=True, errors='replace')
-                print(app_logs)
-            print(subprocess.check_output(['adb', 'logcat', '-d', '-v', 'brief', '*:E'],
-                text=True, errors='replace')[-30000:])
-            raise SystemExit('Native translation failed')
+        if MARKER in line:
+            return json.loads(line.split(MARKER, 1)[1])
+    return None
+
+
+def main() -> None:
+    apk = Path(sys.argv[1]).resolve()
+    for arguments in [('install', '-r', str(apk)), ('logcat', '-c'),
+                      ('shell', 'svc', 'wifi', 'enable'), ('shell', 'svc', 'data', 'enable')]:
+        subprocess.run(adb_command(*arguments), check=True, timeout=90)
     time.sleep(3)
-print(logs[-30000:])
-raise SystemExit('No native translation result within twelve minutes')
+    subprocess.run(adb_command('shell', 'am', 'start', '-n', PACKAGE + '/.MainActivity'),
+        check=True, timeout=30)
+    deadline = time.monotonic() + 720
+    logs = ''
+    while time.monotonic() < deadline:
+        logs = read_logs()
+        result = result_from_logs(logs)
+        if result is not None:
+            print(json.dumps(result, ensure_ascii=False), flush=True)
+            if result.get('ok') is True and result.get('photoPickerRegistered') is True:
+                return
+            print(read_logs('*:E')[-30000:])
+            raise RuntimeError('Native translation or photo-picker registration failed')
+        time.sleep(3)
+    print(logs[-30000:])
+    raise RuntimeError('No native translation result within twelve minutes')
+
+
+if __name__ == '__main__':
+    main()
