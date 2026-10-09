@@ -85,10 +85,11 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   String _displayName(PlaceDetails? info) {
     final original = context.strings.name(widget.place);
     final title = translated?.title;
+    final articleTitle = info?.articleTitle;
     String normalize(String value) => value.replaceAll('_', ' ').trim().toLowerCase();
-    if (!showOriginal && title != null && info?.articleTitle != null &&
+    if (!showOriginal && title != null && articleTitle != null &&
         widget.place.tags['name:${context.strings.language.code}'] == null &&
-        normalize(original) == normalize(info!.articleTitle!)) { return title; }
+        normalize(original) == normalize(articleTitle)) { return title; }
     return original;
   }
   void _openPhoto(PlacePhoto photo, List<PlacePhoto> photos) {
@@ -156,7 +157,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         TextButton(key: const ValueKey('toggle-original-text'),
           onPressed: () => setState(() => showOriginal = !showOriginal),
           child: Text(tr(context, showOriginal ? 'showTranslation' : 'showOriginal'))),
-        if (!showOriginal) Text(tr(context, 'translationAccuracy'),
+        if (!showOriginal) Text(tr(context, 'translationAccuracy')),
       ],
       if ((!showOriginal ? translated?.description : null) ?? info.description case final description?) ...[
         const SizedBox(height: 16), SelectableText(description),
