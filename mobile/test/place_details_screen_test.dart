@@ -50,9 +50,15 @@ void main() {
     await tester.scrollUntilVisible(find.text('Открыт в 1928 году.'), 150, scrollable: scroll);
     expect(find.text('История памятника'), findsOneWidget);
     final toggle = find.byKey(const ValueKey('toggle-original-text'));
-    await tester.ensureVisible(toggle); await tester.tap(toggle); await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(tester.element(toggle), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(toggle.hitTestable(), findsOneWidget);
+    await tester.tap(toggle); await tester.pumpAndSettle();
     expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
-    await tester.ensureVisible(toggle); await tester.tap(toggle); await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(tester.element(toggle), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(toggle.hitTestable(), findsOneWidget);
+    await tester.tap(toggle); await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Открыт в 1928 году.'), 150, scrollable: scroll);
     expect(find.text('Открыт в 1928 году.'), findsOneWidget);
     expect(translator.calls.length, 1); expect(service.calls.length, 1);

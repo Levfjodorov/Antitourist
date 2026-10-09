@@ -144,6 +144,9 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
       ],
       if (translated != null) ...[
         const SizedBox(height: 12),
+        TextButton(key: const ValueKey('toggle-original-text'),
+          onPressed: () => setState(() => showOriginal = !showOriginal),
+          child: Text(tr(context, showOriginal ? 'showTranslation' : 'showOriginal'))),
         Text(tr(context, showOriginal ? 'translationOriginal' : 'translationAutomatic', {
           'source': info.textLanguage ?? '—', 'target': context.strings.language.code,
         })),
@@ -154,9 +157,6 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
               Image.asset('assets/branding/google_logo.png', height: 20, semanticLabel: 'Google'),
               const Text('Translate'),
             ]))),
-        TextButton(key: const ValueKey('toggle-original-text'),
-          onPressed: () => setState(() => showOriginal = !showOriginal),
-          child: Text(tr(context, showOriginal ? 'showTranslation' : 'showOriginal'))),
         if (!showOriginal) Text(tr(context, 'translationAccuracy')),
       ],
       if ((!showOriginal ? translated?.description : null) ?? info.description case final description?) ...[
