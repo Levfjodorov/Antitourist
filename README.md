@@ -40,6 +40,23 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
+## Android 0.5.8
+
+Places without an OSM Wikipedia/Wikidata link now look for Wikipedia articles by
+name and coordinates. Up to three language editions are searched in parallel.
+A real article within 250 m must match the point's name, a localized name or an
+alternative name exactly after case/punctuation normalization. Wikipedia redirect
+titles also count. Generic names, disambiguation pages and ambiguous matches to
+different entities are rejected. Discovered text and the article's free Commons
+photo load in the card with a name/coordinate match label and distance.
+
+For linked and discovered articles, the chosen-language Wikipedia version is
+preferred when available through an interlanguage link; otherwise on-device
+translation remains available. Nearby Commons photos retain their separate 150 m
+label. Coverage is limited to available Wikimedia material, not all websites.
+Google Places Photos would require a separately configured API key and billing;
+Google images and arbitrary website content are not scraped by this build.
+
 ## Android 0.5.7
 
 Version 0.5.7 keeps reflection-based ML Kit registrar names and constructors in
@@ -100,8 +117,8 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.7-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.7-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.5.8-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.8-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,

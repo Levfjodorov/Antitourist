@@ -143,6 +143,10 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         Text(tr(context, 'detailsLoading')),
       ]))),
     if (info != null) ...[
+      if (info.articleDistanceMeters case final double distance)
+        Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(tr(context, 'discoveredArticle', {'distance': distance.round()}),
+            style: Theme.of(context).textTheme.bodySmall)),
       if (photo != null) _photo(photo, context.strings.name(widget.place), photos)
       else if (!info.partial) Padding(padding: const EdgeInsets.only(top: 12),
         child: Text(tr(context, 'noPhoto'))),

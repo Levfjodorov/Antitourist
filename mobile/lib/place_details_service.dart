@@ -3,7 +3,7 @@ import 'package:html/parser.dart' show parseFragment;
 import 'package:http/http.dart' as http;
 import 'places.dart';
 
-const wikimediaUserAgent = 'AntiTourist/0.5.7 (https://github.com/Levfjodorov/Antitourist)';
+const wikimediaUserAgent = 'AntiTourist/0.5.8 (https://github.com/Levfjodorov/Antitourist)';
 
 class PlacePhoto {
   const PlacePhoto({required this.url, required this.source, required this.credit,
@@ -17,19 +17,90 @@ class PlacePhoto {
 class PlaceDetails {
   const PlaceDetails({this.description, this.article, this.photo, this.nearbyPhotos = const [],
     this.sections = const [], this.textLanguage, this.articleTitle, this.textTruncated = false,
-    this.partial = false});
+    this.partial = false, this.articleDistanceMeters});
   final String? description;
   final Uri? article;
   final PlacePhoto? photo;
   final List<PlacePhoto> nearbyPhotos;
   final List<PlaceArticleSection> sections;
   final String? textLanguage, articleTitle;
+  // Set only for an article discovered by matching a name and coordinates.
+  final double? articleDistanceMeters;
   final bool partial, textTruncated;
 }
 
 class PlaceArticleSection {
   const PlaceArticleSection(this.title, this.text);
   final String title, text;
+}
+
+class NearbyArticle {
+  const NearbyArticle({required this.title, required this.language,
+    required this.pageId, required this.distance, this.wikidata});
+  final String title, language;
+  final int pageId;
+  final double distance;
+  final String? wikidata;
+}
+
+String _normalizedName(String value) => value.toLowerCase()
+  .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ').trim();
+
+Set<String> _placeNames(Place place) {
+  const generic = {'place', 'unknown', 'unnamed', 'monument', 'memorial', 'church',
+    'museum', 'park', 'viewpoint', 'cafe', 'café', 'restaurant', 'ruins',
+    'место', 'без названия', 'памятник', 'мемориал', 'церковь', 'музей', 'парк',
+    'смотровая площадка', 'кафе', 'ресторан', 'руины', 'koht', 'nimetu',
+    'mälestusmärk', 'kirik', 'muuseum', 'vaateplatvorm', 'kohvik', 'varemed'};
+  const nameTags = {'name', 'alt_name', 'official_name', 'short_name', 'old_name'};
+  final names = <String>{place.name, ...place.localizedNames.values};
+  for (final entry in place.tags.entries) {
+    if (nameTags.contains(entry.key.split(':').first)) {
+      names.addAll(entry.value.split(';'));
+    }
+  }
+  return names.map(_normalizedName)
+    .where((name) => name.length >= 4 && name.length < 500 && !generic.contains(name)).toSet();
+}
+
+// A nearby article alone is not an identity match. Require an exact normalized
+// title or redirect match, an Earth coordinate within 250 m, and a real article.
+List<NearbyArticle> matchingNearbyArticles(Map<String, dynamic> data, Place place, String language) {
+  final pages = data['query']?['pages'];
+  final names = _placeNames(place);
+  if (pages is! List || !place.point.valid || names.isEmpty) { return const []; }
+  final result = <NearbyArticle>[];
+  final seen = <int>{};
+  for (final raw in pages) {
+    try {
+      if (raw is! Map || raw['ns'] != 0 || raw.containsKey('missing') ||
+          raw['pageprops'] is Map && (raw['pageprops'] as Map).containsKey('disambiguation')) { continue; }
+      final id = raw['pageid'];
+      final title = raw['title'];
+      if (id is! int || id <= 0 || title is! String || title.isEmpty ||
+          title.length >= 500 || title.contains('|')) { continue; }
+      final aliases = <String>[title];
+      if (raw['redirects'] case final List redirects) {
+        for (final redirect in redirects) {
+          if (redirect is Map && redirect['title'] is String) { aliases.add(redirect['title'] as String); }
+        }
+      }
+      if (!aliases.map(_normalizedName).any(names.contains)) { continue; }
+      final coordinates = raw['coordinates'];
+      if (coordinates is! List || coordinates.isEmpty) { continue; }
+      final coordinate = coordinates.first;
+      if (coordinate is! Map || coordinate['globe'] != 'earth' ||
+          coordinate['lat'] is! num || coordinate['lon'] is! num) { continue; }
+      final point = GeoPoint((coordinate['lat'] as num).toDouble(), (coordinate['lon'] as num).toDouble());
+      if (!point.valid) { continue; }
+      final distance = distanceMeters(place.point, point);
+      if (distance > 250 || !seen.add(id)) { continue; }
+      final entity = raw['pageprops']?['wikibase_item'];
+      result.add(NearbyArticle(title: title, language: language, pageId: id, distance: distance,
+        wikidata: entity is String && RegExp(r'^Q[1-9][0-9]*$').hasMatch(entity) ? entity : null));
+    } catch (_) { /* Ignore one malformed candidate, rather than other articles. */ }
+  }
+  return result;
 }
 
 // TextExtracts supplies plain text and wiki-style headings, never executable HTML.
@@ -126,6 +197,50 @@ class PlaceDetailsService {
     if (data.containsKey('error')) { throw const FormatException('Wikimedia API error'); }
     return data;
   }
+  Future<({NearbyArticle? article, bool partial})> _discoverArticle(Place place, String language) async {
+    if (!place.point.valid || _placeNames(place).isEmpty) { return (article: null, partial: false); }
+    // Search the selected language, a local name's language and English. Estonia
+    // gets Estonian before other name languages; the total stays bounded at 3.
+    final languages = <String>{language,
+      if (place.lat >= 57.4 && place.lat <= 59.9 && place.lon >= 21.6 && place.lon <= 28.3) 'et',
+      ...place.localizedNames.keys,
+      ...place.tags.keys.where((key) => key.startsWith('name:')).map((key) => key.substring(5)),
+      'en',
+    }.where((code) => RegExp(r'^[a-z]{2,12}(?:-[a-z]+)?$').hasMatch(code)).take(3);
+    final results = await Future.wait(languages.map((code) async {
+      try {
+        final data = await _get(Uri.https('$code.wikipedia.org', '/w/api.php', {
+          'action': 'query', 'format': 'json', 'formatversion': '2',
+          'generator': 'geosearch', 'ggsnamespace': '0',
+          'ggscoord': '${place.lat}|${place.lon}', 'ggsradius': '250', 'ggslimit': '20',
+          'prop': 'coordinates|redirects|pageprops', 'coprimary': 'primary', 'colimit': '50',
+          'rdnamespace': '0', 'rdlimit': '20', 'ppprop': 'disambiguation|wikibase_item',
+        }));
+        return (matches: matchingNearbyArticles(data, place, code), partial: false);
+      } catch (_) { return (matches: <NearbyArticle>[], partial: true); }
+    }));
+    final matches = results.expand((result) => result.matches).toList();
+    final identities = matches.map((match) => match.wikidata ?? '${match.language}:${match.pageId}').toSet();
+    // Versions of the same Wikidata entity are safe to prefer by language.
+    // Two distinct matching objects are ambiguous even if one is closer.
+    return (article: identities.length == 1 ? matches.first : null,
+      partial: results.any((result) => result.partial));
+  }
+  Future<Map<String, dynamic>?> _wikipediaPage(String title, String language, String preferredLanguage) async {
+    final data = await _get(Uri.https('$language.wikipedia.org', '/w/api.php', {
+      'action': 'query', 'format': 'json', 'formatversion': '2',
+      'prop': 'extracts|pageimages|info|langlinks|pageprops', 'ppprop': 'disambiguation',
+      'piprop': 'name', 'pilicense': 'free', 'inprop': 'url',
+      'explaintext': '1', 'exsectionformat': 'wiki', 'redirects': '1', 'titles': title,
+      'lllang': preferredLanguage, 'lllimit': '1',
+    }));
+    final pages = data['query']?['pages'];
+    if (pages is! List || pages.isEmpty || pages.first is! Map ||
+        (pages.first as Map).containsKey('missing')) { return null; }
+    final page = Map<String, dynamic>.from(pages.first as Map);
+    if (page['pageprops'] is Map && (page['pageprops'] as Map).containsKey('disambiguation')) { return null; }
+    return page;
+  }
   Future<PlaceDetails> load(Place place, String language) {
     final key = '${place.key}:$language';
     if (_cache.containsKey(key)) { return Future.value(_cache[key]!); }
@@ -138,6 +253,7 @@ class PlaceDetailsService {
     String? filename, summary, title, articleLanguage;
     var sections = <PlaceArticleSection>[];
     var textTruncated = false;
+    double? articleDistance;
     Uri? article;
     final commons = place.tags['wikimedia_commons'];
     if (commons != null && commons.startsWith('File:')) { filename = commons.substring(5); }
@@ -157,7 +273,15 @@ class PlaceDetailsService {
       : localizedWikipedia.contains(':') ? localizedWikipedia : '$language:$localizedWikipedia';
     final match = wikipedia == null ? null : RegExp(r'^([a-z]{2,12}(?:-[a-z]+)?):(.+)$').firstMatch(wikipedia);
     if (match != null) { articleLanguage = match[1]; title = match[2]; }
-    final wikidata = place.tags['wikidata'];
+    var wikidata = place.tags['wikidata'];
+    if (title == null && (wikidata == null || !RegExp(r'^Q[1-9][0-9]*$').hasMatch(wikidata))) {
+      final discovery = await _discoverArticle(place, language);
+      failed = failed || discovery.partial;
+      if (discovery.article case final NearbyArticle found) {
+        title = found.title; articleLanguage = found.language; articleDistance = found.distance;
+        wikidata = found.wikidata;
+      }
+    }
     if (wikidata != null && RegExp(r'^Q[1-9][0-9]*$').hasMatch(wikidata)) {
       try {
         final entityData = await _get(Uri.https('www.wikidata.org', '/wiki/Special:EntityData/$wikidata.json'));
@@ -193,22 +317,37 @@ class PlaceDetailsService {
     if (title != null && title.length < 500 && !title.contains('|') && articleLanguage != null) {
       article = Uri.https('$articleLanguage.wikipedia.org', '/wiki/${title.replaceAll(' ', '_')}');
       try {
-        final data = await _get(Uri.https('$articleLanguage.wikipedia.org', '/w/api.php', {
-          'action': 'query', 'format': 'json', 'formatversion': '2', 'prop': 'extracts|pageimages|info',
-          'piprop': 'name', 'pilicense': 'free', 'inprop': 'url',
-          'explaintext': '1', 'exsectionformat': 'wiki', 'redirects': '1', 'titles': title,
-        }));
-        final pages = data['query']?['pages'];
-        final extract = pages is List && pages.isNotEmpty ? pages.first['extract'] : null;
+        var page = await _wikipediaPage(title, articleLanguage, language);
+        final originalPageImage = page?['pageimage'];
+        if (articleLanguage != language) {
+          final links = page?['langlinks'];
+          if (links is List) {
+            for (final link in links) {
+              if (link is! Map || link['lang'] != language) { continue; }
+              final localizedTitle = link['title'] ?? link['*'];
+              if (localizedTitle is! String || localizedTitle.isEmpty ||
+                  localizedTitle.length >= 500 || localizedTitle.contains('|')) { continue; }
+              try {
+                final localized = await _wikipediaPage(localizedTitle, language, language);
+                if (localized?['extract'] case final String text when text.trim().isNotEmpty) {
+                  page = localized; title = localizedTitle; articleLanguage = language;
+                  article = Uri.https('$language.wikipedia.org', '/wiki/${title.replaceAll(' ', '_')}');
+                }
+              } catch (_) { failed = true; /* Keep the original article for translation. */ }
+              break;
+            }
+          }
+        }
+        final extract = page?['extract'];
         if (extract is String && extract.trim().isNotEmpty) {
           final text = parseArticleText(extract);
           summary = text.lead; sections = text.sections; textTruncated = text.truncated;
-          final resolvedTitle = pages.first['title'];
+          final resolvedTitle = page?['title'];
           if (resolvedTitle is String && resolvedTitle.isNotEmpty) { title = resolvedTitle; }
-          final resolvedUrl = safeWebUrl(pages.first['fullurl'] as String?);
+          final resolvedUrl = safeWebUrl(page?['fullurl'] as String?);
           if (resolvedUrl?.host == '$articleLanguage.wikipedia.org') { article = resolvedUrl; }
         }
-        final pageImage = pages is List && pages.isNotEmpty ? pages.first['pageimage'] : null;
+        final pageImage = page?['pageimage'] ?? originalPageImage;
         if (filename == null && pageImage is String && pageImage.isNotEmpty) { filename = pageImage; }
       } catch (_) { failed = true; }
     }
@@ -237,7 +376,8 @@ class PlaceDetailsService {
     }
     final result = PlaceDetails(description: summary, article: article, photo: photo,
       nearbyPhotos: nearby, sections: sections, textLanguage: articleLanguage,
-      articleTitle: title, textTruncated: textTruncated, partial: failed);
+      articleTitle: title, textTruncated: textTruncated, partial: failed,
+      articleDistanceMeters: articleDistance);
     if (!failed) {
       if (_cache.length >= 30) { _cache.remove(_cache.keys.first); }
       _cache[key] = result;

@@ -21,8 +21,151 @@ Map<String, dynamic> photoFixture({String url = 'https://upload.wikimedia.org/ex
   }]}]}};
 http.Response jsonResponse(Map<String, dynamic> data) => http.Response(jsonEncode(data), 200,
   headers: {'content-type': 'application/json; charset=utf-8'});
+Place unlinkedLandmark({String name = 'Raeapteek', Map<String, String> tags = const {}}) => Place(
+  id: 'node/345', name: name, category: 'history', lat: 59.437, lon: 24.75,
+  description: 'OSM', score: 70, legalAccess: true, tags: tags,
+  osmUrl: Uri.parse('https://www.openstreetmap.org/node/345'));
+Map<String, dynamic> nearbyArticle({int id = 123, String title = 'Raeapteek',
+  String entity = 'Q1841234', double lat = 59.4371, List<String> aliases = const []}) => {
+  'pageid': id, 'ns': 0, 'title': title,
+  'coordinates': [{'lat': lat, 'lon': 24.75, 'globe': 'earth'}],
+  'pageprops': {'wikibase_item': entity},
+  'redirects': [for (final alias in aliases) {'title': alias}],
+};
 
 void main() {
+  test('Coordinate discovery requires a matching title or alias and rejects unrelated or invalid articles', () {
+    final place = unlinkedLandmark(tags: {'alt_name': 'Tallinna Raeapteek;Revali Raeapteek'});
+    final good = nearbyArticle(title: 'Town Hall Pharmacy', aliases: ['TALLINNA_RAEAPTEEK']);
+    final candidates = [
+      nearbyArticle(title: 'Nearby Church'), nearbyArticle(lat: 60),
+      {...nearbyArticle(id: 2), 'coordinates': []},
+      {...nearbyArticle(id: 3), 'pageprops': {'disambiguation': ''}},
+      {...nearbyArticle(id: 4), 'ns': 1},
+      {...nearbyArticle(id: 5), 'missing': true},
+      {...nearbyArticle(id: 6), 'coordinates': [{'lat': 59.437, 'lon': 24.75, 'globe': 'moon'}]},
+      {'malformed': true}, good, good,
+    ];
+    final matches = matchingNearbyArticles({'query': {'pages': candidates}}, place, 'en');
+    expect(matches.length, 1); expect(matches.single.title, 'Town Hall Pharmacy');
+    expect(matches.single.distance, closeTo(11.1, 1));
+    expect(matches.single.wikidata, 'Q1841234');
+    expect(matchingNearbyArticles({'query': {'pages': [nearbyArticle(title: 'Monument')]}},
+      unlinkedLandmark(name: 'Monument'), 'en'), isEmpty);
+  });
+  test('An unlinked landmark discovers history and its photo, then prefers the chosen-language article', () async {
+    final calls = <Uri>[];
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      final uri = request.url; calls.add(uri);
+      if (uri.host == 'www.wikidata.org') {
+        return jsonResponse({'entities': {'Q1841234': {'claims': {'P18': [
+          {'rank': 'normal', 'mainsnak': {'datavalue': {'value': 'Place.jpg'}}},
+        ]}}}});
+      }
+      if (uri.host.endsWith('.wikipedia.org') && uri.queryParameters['generator'] == 'geosearch') {
+        expect(uri.queryParameters['ggsnamespace'], '0');
+        expect(uri.queryParameters['colimit'], '50');
+        return jsonResponse({'query': {'pages': uri.host == 'et.wikipedia.org'
+          ? [nearbyArticle(), nearbyArticle(id: 9, title: 'Nearby Church', entity: 'Q9')]
+          : []}});
+      }
+      if (uri.host == 'et.wikipedia.org') {
+        expect(uri.queryParameters['titles'], 'Raeapteek');
+        return jsonResponse({'query': {'pages': [{'title': 'Raeapteek', 'extract': 'Vana apteek.',
+          'pageimage': 'Place.jpg', 'langlinks': [{'lang': 'ru', 'title': 'Ратушная аптека'}]}]}});
+      }
+      if (uri.host == 'ru.wikipedia.org') {
+        expect(uri.queryParameters['titles'], 'Ратушная аптека');
+        return jsonResponse({'query': {'pages': [{'title': 'Ратушная аптека',
+          'fullurl': 'https://ru.wikipedia.org/wiki/Ратушная_аптека',
+          'extract': 'Старинная аптека.\n\n== История ==\nРаботает с XV века.'}]}});
+      }
+      expect(uri.host, 'commons.wikimedia.org');
+      expect(uri.queryParameters['titles'], 'File:Place.jpg');
+      return jsonResponse(photoFixture());
+    }));
+    final details = await service.load(unlinkedLandmark(), 'ru');
+    expect(details.description, 'Старинная аптека.'); expect(details.textLanguage, 'ru');
+    expect(details.sections.single.text, 'Работает с XV века.');
+    expect(details.article!.host, 'ru.wikipedia.org'); expect(details.photo, isNotNull);
+    expect(details.articleDistanceMeters, closeTo(11.1, 1)); expect(details.partial, isFalse);
+    expect(calls.length, 7);
+    await service.load(unlinkedLandmark(), 'ru'); expect(calls.length, 7);
+    service.close();
+  });
+  test('Two different matching objects are ambiguous; versions of one entity prefer the app language', () async {
+    var ambiguous = true;
+    final articleRequests = <Uri>[];
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      final uri = request.url;
+      if (uri.host == 'www.wikidata.org') { return jsonResponse({'entities': {}}); }
+      if (uri.host == 'commons.wikimedia.org') { return jsonResponse({'query': {'pages': []}}); }
+      if (uri.queryParameters['generator'] == 'geosearch') {
+        return jsonResponse({'query': {'pages': [nearbyArticle(
+          id: uri.host == 'et.wikipedia.org' ? 2 : 1,
+          entity: ambiguous && uri.host == 'et.wikipedia.org' ? 'Q99' : 'Q1841234')]}});
+      }
+      articleRequests.add(uri);
+      return jsonResponse({'query': {'pages': [{'extract': 'Description'}]}});
+    }));
+    final first = await service.load(unlinkedLandmark(), 'ru');
+    expect(first.description, isNull); expect(first.articleDistanceMeters, isNull);
+    expect(articleRequests, isEmpty);
+    ambiguous = false;
+    final second = await service.load(unlinkedLandmark(), 'en');
+    expect(second.textLanguage, 'en'); expect(second.articleDistanceMeters, isNotNull);
+    expect(articleRequests.single.host, 'en.wikipedia.org'); service.close();
+  });
+  test('A linked foreign article uses a language link without geographic discovery', () async {
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      if (request.url.host == 'et.wikipedia.org') {
+        expect(request.url.queryParameters['lllang'], 'ru');
+        return jsonResponse({'query': {'pages': [{'extract': 'Algtekst.',
+          'langlinks': [{'lang': 'ru', 'title': 'Русская статья'}]}]}});
+      }
+      if (request.url.host == 'ru.wikipedia.org') {
+        expect(request.url.queryParameters.containsKey('generator'), isFalse);
+        return jsonResponse({'query': {'pages': [{'title': 'Русская статья', 'extract': 'Русский текст.'}]}});
+      }
+      return jsonResponse({'query': {'pages': []}});
+    }));
+    final details = await service.load(linkedPlace({'wikipedia': 'et:Koht'}), 'ru');
+    expect(details.description, 'Русский текст.'); expect(details.textLanguage, 'ru');
+    expect(details.articleDistanceMeters, isNull); service.close();
+  });
+  test('Localized article failure keeps the original and allows a source retry', () async {
+    var russianRequests = 0;
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      if (request.url.host == 'et.wikipedia.org') {
+        return jsonResponse({'query': {'pages': [{'extract': 'Algtekst.',
+          'langlinks': [{'lang': 'ru', 'title': 'Русская статья'}]}]}});
+      }
+      if (request.url.host == 'ru.wikipedia.org') {
+        russianRequests++;
+        return russianRequests == 1 ? http.Response('unavailable', 503)
+          : jsonResponse({'query': {'pages': [{'extract': 'Русский текст.'}]}});
+      }
+      return jsonResponse({'query': {'pages': []}});
+    }));
+    final place = linkedPlace({'wikipedia': 'et:Koht'});
+    final first = await service.load(place, 'ru');
+    expect(first.description, 'Algtekst.'); expect(first.textLanguage, 'et'); expect(first.partial, isTrue);
+    final second = await service.load(place, 'ru');
+    expect(second.description, 'Русский текст.'); expect(second.partial, isFalse); service.close();
+  });
+  test('Discovery failure leaves nearby photos available and does not cache the failed lookup', () async {
+    var failures = 0;
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      if (request.url.host == 'ru.wikipedia.org') { failures++; return http.Response('', 503); }
+      return jsonResponse({'query': {'pages': request.url.host == 'commons.wikimedia.org'
+        ? [{...(photoFixture()['query']['pages'] as List).single as Map, 'ns': 6,
+            'coordinates': [{'lat': 59.4371, 'lon': 24.75, 'globe': 'earth'}]}] : []}});
+    }));
+    final first = await service.load(unlinkedLandmark(), 'ru');
+    expect(first.partial, isTrue); expect(first.nearbyPhotos.length, 1);
+    expect(first.photo, isNull); expect(first.description, isNull);
+    await service.load(unlinkedLandmark(), 'ru'); expect(failures, 2); service.close();
+  });
   test('Full linked article includes history and preserves its source language', () async {
     final service = PlaceDetailsService(client: MockClient((request) async {
       if (request.url.host == 'www.wikidata.org') {
@@ -145,7 +288,7 @@ void main() {
     final service = PlaceDetailsService(client: MockClient((request) async {
       calls++;
       if (request.url.host == 'en.wikipedia.org') {
-        expect(request.url.queryParameters['prop'], 'extracts|pageimages|info');
+        expect(request.url.queryParameters['prop'], 'extracts|pageimages|info|langlinks|pageprops');
         return jsonResponse({'query': {'pages': [{'extract': 'Description', 'pageimage': 'Place.jpg'}]}});
       }
       expect(request.url.queryParameters['titles'], 'File:Place.jpg');

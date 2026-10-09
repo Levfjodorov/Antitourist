@@ -31,6 +31,19 @@ class DeferredTranslator implements PlaceTextTranslator {
 }
 
 void main() {
+  testWidgets('A discovered article shows the name-and-coordinate match and its distance', (tester) async {
+    final service = DeferredDetailsService();
+    await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
+      place: routePlaces.first, demo: false, service: service)));
+    service.calls.single.result.complete(const PlaceDetails(description: 'История аптеки.',
+      textLanguage: 'ru', articleTitle: 'Ратушная аптека', articleDistanceMeters: 12,
+      article: null));
+    await tester.pumpAndSettle();
+    final hint = find.text('Статья найдена по совпадению названия и координат: примерно 12 м от точки. Проверь источник, если сведения не соответствуют месту.');
+    final scroll = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(hint, 150, scrollable: scroll);
+    expect(hint, findsOneWidget); expect(tester.takeException(), isNull);
+  });
   const source = PlaceDetails(articleTitle: 'Monument', textLanguage: 'et',
     description: 'Avatud 1928. aastal.', sections: [PlaceArticleSection('Ajalugu', 'Taastatud 2009. aastal.')]);
   const translated = TranslatedPlaceText(title: 'Памятник', description: 'Открыт в 1928 году.',

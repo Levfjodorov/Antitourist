@@ -1,5 +1,6 @@
 // Complete UI catalogue: Russian, Estonian, English (AppLanguage order).
 const translations = <String, List<String>>{
+  "discoveredArticle": ["Статья найдена по совпадению названия и координат: примерно {distance} м от точки. Проверь источник, если сведения не соответствуют месту.", "Artikkel leiti nime ja koordinaatide järgi: punktist umbes {distance} m. Kontrolli allikat, kui teave ei vasta kohale.", "Article found by matching the name and coordinates, about {distance} m from the point. Check the source if the information does not match the place."],
   "translationWifiRequired": ["Для загрузки языковых пакетов подключи Wi-Fi или разреши мобильный интернет кнопкой ниже.", "Keelepakettide laadimiseks ühenda Wi-Fi või luba alloleva nupuga mobiilne internet.", "Connect to Wi-Fi or allow mobile data below to download the language packs."],
   "translationOffline": ["Для загрузки языковых пакетов нужен интернет. Исходный текст сохранён.", "Keelepakettide laadimiseks on vaja internetti. Algtekst on alles.", "Internet is needed to download language packs. The original text is kept."],
   "translationTimeout": ["Загрузка языкового пакета не завершилась вовремя. Проверь соединение и повтори перевод.", "Keelepaketi laadimine ei lõppenud õigeaegselt. Kontrolli ühendust ja proovi uuesti.", "The language-pack download timed out. Check your connection and retry."],
@@ -110,7 +111,7 @@ const translations = <String, List<String>>{
   "detailsLoading": ["Загружаем…", "Laadime…", "Loading…"],
   "detailsError": ["Часть сведений не удалось загрузить. Проверь интернет и попробуй ещё раз.", "Osa infot ei saanud laadida. Kontrolli internetiühendust ja proovi uuesti.", "Some information could not be loaded. Check your connection and try again."],
   "noPhoto": ["Фото именно этого места пока нет.", "Selle koha fotot veel pole.", "No photo linked to this exact place is available yet."],
-  "noExtraInfo": ["История этого места пока отсутствует в связанных источниках.", "Selle koha ajalugu seotud allikates veel puudub.", "The linked sources do not yet have a history of this place."],
+  "noExtraInfo": ["Не удалось найти статью об этом месте в Wikipedia или связанных источниках.", "Selle koha kohta ei leitud artiklit Wikipediast ega seotud allikatest.", "No article about this place was found in Wikipedia or the linked sources."],
   "photoError": ["Не удалось показать фото. Попробуй загрузить ещё раз.", "Fotot ei saanud näidata. Proovi uuesti laadida.", "Could not display the photo. Try loading it again."],
   "photoSource": ["Фото на Wikimedia Commons", "Foto Wikimedia Commonsis", "Photo on Wikimedia Commons"],
   "articleSource": ["Источник текста", "Teksti allikas", "Text source"],
