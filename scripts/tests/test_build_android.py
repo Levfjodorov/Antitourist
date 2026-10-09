@@ -37,6 +37,7 @@ BADGING = '''package: name='com.antitourist.antitourist' versionCode='9' version
 sdkVersion:'24'
 targetSdkVersion:'36'
 uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
 uses-permission: name='android.permission.ACCESS_COARSE_LOCATION'
 uses-permission: name='android.permission.ACCESS_FINE_LOCATION'
 '''
@@ -57,7 +58,7 @@ class BuildTests(unittest.TestCase):
         root = ET.parse(path).getroot()
         permissions = [p.get(ANDROID + 'name') for p in root.findall('uses-permission')]
         self.assertCountEqual(permissions, ['android.permission.' + p for p in
-            ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']])
+            ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']])
         app = root.find('application')
         self.assertEqual(app.get(ANDROID + 'name'), '${applicationName}')
         self.assertEqual(app.get(ANDROID + 'label'), 'AntiTourist')
@@ -144,6 +145,24 @@ class BuildTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unrecognized signing template'):
             builder.patch_signing(self.root, True)
 
+    def test_mlkit_keep_rules_apply_to_both_templates_and_survive_signing_changes(self):
+        for filename, text in [('build.gradle.kts', KOTLIN), ('build.gradle', GROOVY)]:
+            app = self.root / filename.replace('.', '-')
+            app.mkdir()
+            path = app / filename
+            path.write_text(text)
+            builder.patch_keep_rules(app)
+            first = path.read_text()
+            builder.patch_keep_rules(app)
+            self.assertEqual(path.read_text(), first)
+            self.assertEqual(first.count('proguard-rules.pro'), 1)
+            builder.patch_signing(app, True)
+            builder.patch_signing(app, False)
+            self.assertEqual(path.read_text(), first)
+        (self.root / 'build.gradle.kts').write_text('android {}')
+        with self.assertRaisesRegex(RuntimeError, 'cannot add ML Kit keep rules'):
+            builder.patch_keep_rules(self.root)
+
     def test_apk_signer_and_packaged_manifest_must_match_requested_release(self):
         pubspec = self.root / 'pubspec.yaml'
         pubspec.write_text('version: 0.5.1+9\n')
@@ -195,11 +214,15 @@ class BuildTests(unittest.TestCase):
                 builder.android_tool('apksigner')
 
     def test_pipeline_refreshes_sources_runs_checks_before_build_and_copies_artifacts(self):
+        native = self.root / 'mobile' / 'android' / 'MainActivity.kt'
+        native.parent.mkdir(parents=True)
+        native.write_text('translation network channel fixture')
+        (native.parent / 'proguard-rules.pro').write_text('keep registrar fixture')
         for folder in ['lib', 'assets', 'test']:
             path = self.root / 'mobile' / folder
             path.mkdir(parents=True)
             (path / 'new.txt').write_text(folder)
-        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.5.1+9\n')
+        (self.root / 'mobile' / 'pubspec.yaml').write_text('version: 0.8.7+123\n')
         (self.root / 'mobile' / 'pubspec.lock').write_text('test lock')
         calls = []
 
@@ -211,6 +234,9 @@ class BuildTests(unittest.TestCase):
                 manifest.parent.mkdir(parents=True)
                 manifest.write_text(MANIFEST)
                 (build / 'android' / 'app' / 'build.gradle.kts').write_text(KOTLIN)
+                activity = build / 'android' / 'app' / 'src' / 'main' / 'kotlin' / 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt'
+                activity.parent.mkdir(parents=True)
+                activity.write_text('generated activity fixture')
                 (build / 'test').mkdir()
                 (build / 'test' / 'widget_test.dart').write_text('stale template test')
             if arguments[:2] == ['pub', 'get']:
@@ -231,15 +257,19 @@ class BuildTests(unittest.TestCase):
         build = self.root / 'build' / 'android-project'
         self.assertFalse((build / 'test' / 'widget_test.dart').exists())
         self.assertTrue((build / 'test' / 'new.txt').is_file())
+        activity = build / 'android' / 'app' / 'src' / 'main' / 'kotlin' / 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt'
+        self.assertEqual(activity.read_text(), native.read_text())
+        self.assertEqual((build / 'android' / 'app' / 'proguard-rules.pro').read_text(), 'keep registrar fixture')
+        self.assertIn('proguard-rules.pro', (build / 'android' / 'app' / 'build.gradle.kts').read_text())
         self.assertEqual(calls[1:], [
             ['pub', 'get', '--enforce-lockfile'], ['pub', 'run', 'flutter_launcher_icons'],
-            ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded'], ['build', 'apk', '--release', '--no-pub'],
+            ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded', '--dart-define=ANTITOURIST_VERSION=0.8.7'], ['build', 'apk', '--release', '--no-pub', '--dart-define=ANTITOURIST_VERSION=0.8.7'],
         ])
-        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.5.1-test.apk').is_file())
+        self.assertTrue((self.root / 'dist' / 'AntiTourist-0.8.7-test.apk').is_file())
         self.assertEqual((self.root / 'dist' / 'pubspec.lock').read_text(), 'test lock')
         self.assertEqual(json.loads((self.root / 'dist' / 'flutter-version.json').read_text()), {'frameworkVersion': '3.47.6'})
-        self.assertIn('AntiTourist-0.5.1-test.apk', (self.root / 'dist' / 'SHA256SUMS').read_text())
-        self.assertEqual(builder.apk_filename(self.root / 'mobile' / 'pubspec.yaml', True), 'AntiTourist-0.5.1-release.apk')
+        self.assertIn('AntiTourist-0.8.7-test.apk', (self.root / 'dist' / 'SHA256SUMS').read_text())
+        self.assertEqual(builder.apk_filename(self.root / 'mobile' / 'pubspec.yaml', True), 'AntiTourist-0.8.7-release.apk')
 
 
 if __name__ == '__main__':

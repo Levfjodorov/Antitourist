@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import 'external_links.dart';
 import 'location_address.dart';
 import 'app_store.dart';
+import 'personal_photos.dart';
+import 'offline_store.dart';
 import 'my_places_screen.dart';
 import 'language_settings.dart';
 import 'osm.dart';
@@ -15,17 +17,26 @@ import 'places.dart';
 import 'results_screen.dart';
 import 'route_map.dart';
 
+// Android builds supply the version from pubspec.yaml through the build script.
+const appVersion = String.fromEnvironment('ANTITOURIST_VERSION');
+const appTitle = appVersion == '' ? 'AntiTourist' : 'AntiTourist · $appVersion';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await LanguageSettings.load();
   final store = await AppStore.load();
-  runApp(AntiTouristApp(settings: settings, store: store));
+  final photos = await PersonalPhotos.load();
+  await photos.recover(store);
+  final offline = await OfflineStore.load();
+  runApp(AntiTouristApp(settings: settings, store: store, photos: photos, offline: offline));
 }
 
 class AntiTouristApp extends StatefulWidget {
-  const AntiTouristApp({super.key, this.settings, this.store});
+  const AntiTouristApp({super.key, this.settings, this.store, this.photos, this.offline});
   final LanguageSettings? settings;
   final AppStore? store;
+  final PersonalPhotos? photos;
+  final OfflineStore? offline;
   @override
   State<AntiTouristApp> createState() => _AntiTouristAppState();
 }
@@ -33,13 +44,15 @@ class AntiTouristApp extends StatefulWidget {
 class _AntiTouristAppState extends State<AntiTouristApp> {
   late final LanguageSettings settings;
   late final AppStore store;
+  late final PersonalPhotos photos;
+  late final OfflineStore offline;
   @override
-  void initState() { super.initState(); settings = widget.settings ?? LanguageSettings(); store = widget.store ?? AppStore(); }
+  void initState() { super.initState(); settings = widget.settings ?? LanguageSettings(); store = widget.store ?? AppStore(); photos = widget.photos ?? PersonalPhotos(); offline = widget.offline ?? OfflineStore(); }
   @override
   void dispose() { if (widget.settings == null) { settings.dispose(); } if (widget.store == null) { store.dispose(); } super.dispose(); }
   @override
   Widget build(BuildContext context) => AnimatedBuilder(animation: settings,
-    builder: (_, child) => LanguageScope(settings: settings, child: AppStoreScope(store: store, child: MaterialApp(
+    builder: (_, child) => LanguageScope(settings: settings, child: AppStoreScope(store: store, child: PersonalPhotosScope(photos: photos, child: OfflineScope(store: offline, child: MaterialApp(
       debugShowCheckedModeBanner: false, title: 'AntiTourist',
       locale: Locale(settings.language.code),
       supportedLocales: const [Locale('ru'), Locale('et'), Locale('en')],
@@ -47,7 +60,7 @@ class _AntiTouristAppState extends State<AntiTouristApp> {
       theme: ThemeData(useMaterial3: true, brightness: Brightness.dark,
         colorSchemeSeed: const Color(0xffb5f36a),
         scaffoldBackgroundColor: const Color(0xff111711)),
-      home: const HomeScreen()))));
+      home: const HomeScreen()))))));
 }
 
 class HomeScreen extends StatefulWidget {
@@ -134,14 +147,19 @@ class _HomeScreenState extends State<HomeScreen> {
           minutes: (hours * 60).round(), wildness: wildness.round(), interests: interests);
       } else {
         final radius = (radiusKm * 1000).round();
-        final candidates = await service.search(origin, radius, Set.of(interests));
-        candidateCount = candidates.length;
+        final found = await service.search(origin, radius, Set.of(interests));
+        final store = mounted ? AppStoreScope.of(context) : null;
+        final candidates = found.where((place) => store?.canSuggest(place) ?? true).toList();
+        candidateCount = found.length;
         pool = candidates.where((p) => interests.contains(p.category) &&
           (!onlyPublic || p.legalAccess)).take(500).toList();
         selected = rankLivePlaces(candidates, start: origin, radius: radius,
           minutes: (hours * 60).round(), wildness: wildness.round(),
-          interests: interests, onlyPublicAccess: onlyPublic);
+          interests: interests, onlyPublicAccess: onlyPublic, visitedKeys: store?.visitedKeys ?? const {});
         if (selected.isEmpty) {
+          if (found.isNotEmpty && candidates.isEmpty) {
+            throw const SearchFailure('Все найденные места уже посещены или исключены. Измени фильтр или радиус.');
+          }
           throw SearchFailure(onlyPublic
             ? 'Нет мест с явно указанным разрешённым доступом. Измени фильтр или радиус.'
             : 'Подходящих мест не найдено. Увеличь радиус или выбери другие интересы.');
@@ -161,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(actions: const [LanguageMenu()], title: const Text('AntiTourist · 0.5.1')),
+    appBar: AppBar(actions: const [LanguageMenu()], title: const Text(appTitle)),
     body: ListView(padding: const EdgeInsets.all(24), children: [
       Align(alignment: Alignment.centerLeft, child: Image.asset(
         'assets/branding/logo_foreground.png', width: 112, height: 112,
@@ -225,6 +243,11 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(tr(context, 'publicOnly')),
         subtitle: Text(tr(context, 'publicHint')),
         value: onlyPublic, onChanged: loading ? null : (v) => setState(() => onlyPublic = v)),
+      if (!demo && AppStoreScope.of(context) != null)
+        SwitchListTile(contentPadding: EdgeInsets.zero, key: const ValueKey('only-new-places'),
+          title: Text(tr(context, 'onlyNewPlaces')), subtitle: Text(tr(context, 'onlyNewHint')),
+          value: AppStoreScope.of(context)!.onlyNewPlaces,
+          onChanged: loading ? null : AppStoreScope.of(context)!.setOnlyNew),
       SwitchListTile(contentPadding: EdgeInsets.zero,
         title: Text(tr(context, 'demoMode')),
         subtitle: Text(tr(context, 'demoHint')),

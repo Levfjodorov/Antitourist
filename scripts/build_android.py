@@ -60,7 +60,7 @@ def patch_manifest(path: Path) -> None:
     tree = ET.parse(path)
     root = tree.getroot()
     name = '{' + namespace + '}name'
-    permissions = ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']
+    permissions = ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']
     existing = {p.get(name) for p in root.findall('uses-permission')}
     for permission in permissions:
         full_name = 'android.permission.' + permission
@@ -138,6 +138,27 @@ def patch_signing(app: Path, release: bool) -> None:
     path.write_text(text, encoding='utf-8')
 
 
+def patch_keep_rules(app: Path) -> None:
+    """Keep reflection-based ML Kit registration in optimized release APKs."""
+    kotlin = app / 'build.gradle.kts'
+    groovy = app / 'build.gradle'
+    if kotlin.is_file():
+        path = kotlin
+        rule = '            proguardFiles("proguard-rules.pro")\n'
+    elif groovy.is_file():
+        path = groovy
+        rule = "            proguardFiles 'proguard-rules.pro'\n"
+    else:
+        raise RuntimeError('Generated Android project has no Gradle app configuration')
+    text = path.read_text(encoding='utf-8')
+    anchor = '        release {\n'
+    if rule not in text:
+        if text.count(anchor) != 1:
+            raise RuntimeError('Unrecognized release template; cannot add ML Kit keep rules')
+        text = text.replace(anchor, anchor + rule)
+    path.write_text(text, encoding='utf-8')
+
+
 def app_version(pubspec: Path) -> tuple[str, int]:
     match = re.search(r'^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$',
                       pubspec.read_text(encoding='utf-8'), re.MULTILINE)
@@ -190,7 +211,7 @@ def verify_apk(apk: Path, pubspec: Path, certificate: str | None) -> dict:
         raise RuntimeError('APK identity, version, minimum SDK, or release build mode is incorrect')
     permissions = re.findall(r"^uses-permission: name='([^']+)'", badging, re.MULTILINE)
     required = {'android.permission.' + p for p in
-                ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']}
+                ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']}
     if not required.issubset(permissions):
         raise RuntimeError('APK is missing required internet/location permissions')
     return {'application_id': package.group(1), 'version_name': version, 'version_code': code,
@@ -220,7 +241,8 @@ def main() -> int:
     lockfile = ROOT / 'mobile' / 'pubspec.lock'
     if not lockfile.is_file():
         raise RuntimeError('mobile/pubspec.lock is required; resolve dependencies with the pinned Flutter SDK')
-    app_version(pubspec)
+    version_name, _ = app_version(pubspec)
+    version_define = '--dart-define=ANTITOURIST_VERSION=' + version_name
     build = ROOT / 'build' / 'android-project'
     if build.exists():
         print('Refreshing the generated Android project with the pinned Flutter SDK.', flush=True)
@@ -236,8 +258,14 @@ def main() -> int:
         shutil.copytree(ROOT / 'mobile' / folder, target)
     shutil.copy2(pubspec, build / 'pubspec.yaml')
     shutil.copy2(lockfile, build / 'pubspec.lock')
+    activity = ROOT / 'mobile' / 'android' / 'MainActivity.kt'
+    shutil.copy2(activity, build / 'android' / 'app' / 'src' / 'main' / 'kotlin' /
+                 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt')
+    shutil.copy2(ROOT / 'mobile' / 'android' / 'proguard-rules.pro',
+                 build / 'android' / 'app' / 'proguard-rules.pro')
     patch_manifest(build / 'android' / 'app' / 'src' / 'main' / 'AndroidManifest.xml')
     patch_min_sdk(build / 'android' / 'app')
+    patch_keep_rules(build / 'android' / 'app')
     patch_signing(build / 'android' / 'app', args.release_signing)
     if args.prepare_only:
         print('Prepared: ' + str(build))
@@ -246,8 +274,8 @@ def main() -> int:
     # Generate launcher resources in the isolated project before compiling.
     run(flutter, ['pub', 'run', 'flutter_launcher_icons'], build)
     run(flutter, ['analyze', '--no-pub'], build)
-    run(flutter, ['test', '--no-pub', '--reporter', 'expanded'], build)
-    run(flutter, ['build', 'apk', '--release', '--no-pub'], build)
+    run(flutter, ['test', '--no-pub', '--reporter', 'expanded', version_define], build)
+    run(flutter, ['build', 'apk', '--release', '--no-pub', version_define], build)
     apk = build / 'build' / 'app' / 'outputs' / 'flutter-apk' / 'app-release.apk'
     if not apk.is_file():
         raise RuntimeError('Flutter did not produce the expected APK')

@@ -19,6 +19,7 @@ List<Place> alternatives(List<Place> pool, List<Place> selected, {Place? replaci
 List<Place>? anotherSelection(List<Place> pool, List<Place> selected, {Random? random}) {
   final extra = alternatives(pool, selected)..shuffle(random ?? Random());
   if (extra.isEmpty) { return null; }
-  final retained = List<Place>.of(selected)..shuffle(random ?? Random());
+  final allowed = pool.map((p) => p.key).toSet();
+  final retained = selected.where((p) => allowed.contains(p.key)).toList()..shuffle(random ?? Random());
   return [...extra, ...retained].take(selected.length).toList();
 }

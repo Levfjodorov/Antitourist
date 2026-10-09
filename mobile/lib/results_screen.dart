@@ -11,6 +11,7 @@ import 'routing_service.dart';
 import 'walk_screen.dart';
 import 'walk_session.dart';
 import 'walking_route.dart';
+import 'offline_store.dart';
 
 class ResultsScreen extends StatefulWidget {
   const ResultsScreen({super.key, required this.places, required this.demo,
@@ -98,7 +99,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Future<void> _another() async {
-    final replacement = anotherSelection(_pool, _selected);
+    final store = AppStoreScope.of(context);
+    final pool = _pool.where((p) => store?.canSuggest(p) ?? true).toList();
+    final replacement = anotherSelection(pool, _selected);
     if (replacement == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'noAlternatives'))));
       return;
@@ -107,7 +110,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Future<void> _replace(Place place) async {
-    final options = alternatives(_pool, _selected, replacing: place);
+    final store = AppStoreScope.of(context);
+    final options = alternatives(_pool.where((p) => store?.canSuggest(p) ?? true).toList(), _selected, replacing: place);
     if (options.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'noAlternatives'))));
       return;
@@ -127,6 +131,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
   }
 
+  Future<void> _prepareOffline({bool allowMobileData = false}) async {
+    final offline = OfflineScope.of(context);
+    if (offline == null || _route == null || !await _save() || !mounted) { return; }
+    final store = AppStoreScope.of(context)!;
+    final walk = store.walks.firstWhere((w) => w.id == _savedId);
+    final language = context.strings.language.code;
+    final success = await offline.prepare(walk, language, allowMobileData: allowMobileData);
+    if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context,
+      success ? 'offlineReady' : 'offlinePartial')))); }
+  }
+
   Future<void> _openWalk() async {
     await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) =>
       WalkScreen(session: _session!, start: widget.start, onChanged: () => _save())));
@@ -137,7 +152,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget build(BuildContext context) {
     final route = _route;
     final places = route?.places ?? _selected;
-    final busy = _building || _saving;
+    final offline = OfflineScope.of(context);
+    final busy = _building || _saving || (offline?.busy ?? false);
     return Scaffold(
       appBar: AppBar(actions: const [LanguageMenu()], title: Text(tr(context, 'results'))),
       body: ListView(padding: const EdgeInsets.all(20), children: [
@@ -175,6 +191,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
               label: Text(_session!.complete ? tr(context, 'walkResult')
                 : _session!.processed > 0 ? tr(context, 'continueWalk') : tr(context, 'startWalk'))),
             Text(tr(context, 'routeCaution')),
+            if (offline?.available == true) ...[
+              Text(tr(context, 'offlineHint')),
+              if (offline!.ready(_savedId, route, context.strings.language.code)) Text(tr(context, 'offlineReady')),
+              OutlinedButton.icon(key: const ValueKey('prepare-offline'),
+                onPressed: busy ? null : () => _prepareOffline(), icon: const Icon(Icons.download_for_offline_outlined),
+                label: Text(tr(context, 'prepareOffline'))),
+              if (!offline.ready(_savedId, route, context.strings.language.code)) TextButton(
+                onPressed: busy ? null : () => _prepareOffline(allowMobileData: true),
+                child: Text(tr(context, 'prepareOfflineMobile'))),
+              if (offline.busy) ...[LinearProgressIndicator(value: offline.total == 0 ? null : offline.done / offline.total),
+                Text(tr(context, 'offlineProgress', {'done': offline.done, 'total': offline.total}))],
+              if (offline.saveFailed || offline.loadFailed) Text(tr(context, 'offlineStorageError')),
+            ],
           ],
         ],
         const SizedBox(height: 12),

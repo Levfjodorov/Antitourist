@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'places.dart';
 import 'language_settings.dart';
 import 'saved_data.dart';
+import 'place_memory.dart';
+import 'walk_session.dart';
 
 abstract interface class AppStorage {
   Future<String?> read();
@@ -25,7 +27,7 @@ class FileAppStorage implements AppStorage {
       try {
         final contents = await candidate.readAsString();
         final value = jsonDecode(contents);
-        if (value is Map && value['version'] == 1 && value['walks'] is List && value['favorites'] is List) {
+        if (value is Map && [1, 2].contains(value['version']) && value['walks'] is List && value['favorites'] is List) {
           recovered = candidate.path == backup.path;
           return contents;
         }
@@ -45,7 +47,7 @@ class FileAppStorage implements AppStorage {
       var valid = false;
       try {
         final previous = jsonDecode(await file.readAsString());
-        valid = previous is Map && previous['version'] == 1 &&
+        valid = previous is Map && [1, 2].contains(previous['version']) &&
           previous['walks'] is List && previous['favorites'] is List;
       } catch (_) { /* Preserve a healthy backup after recovering a damaged file. */ }
       if (valid) { await file.copy(backup.path); }
@@ -59,6 +61,9 @@ class AppStore extends ChangeNotifier {
   final AppStorage? storage;
   final _walks = <SavedWalk>[];
   final _favorites = <Place>[];
+  final _memories = <String, PlaceMemory>{};
+  String? pendingPhotoPlace;
+  bool onlyNewPlaces = false;
   Future<void> _writes = Future<void>.value();
   bool saveFailed = false, loadFailed = false;
   static Future<AppStore> load({AppStorage? storage}) async {
@@ -72,7 +77,7 @@ class AppStore extends ChangeNotifier {
       if (contents == null) { return result; }
       result.loadFailed = target is FileAppStorage && target.recovered;
       final data = jsonDecode(contents) as Map<String, dynamic>;
-      if (data['version'] != 1 || data['walks'] is! List || data['favorites'] is! List) {
+      if (![1, 2].contains(data['version']) || data['walks'] is! List || data['favorites'] is! List) {
         throw const FormatException('Unsupported saved data');
       }
       for (final raw in data['walks'] as List) {
@@ -87,6 +92,20 @@ class AppStore extends ChangeNotifier {
           if (!result.isFavorite(place)) { result._favorites.add(place); }
         } catch (_) { result.loadFailed = true; }
       }
+      final memories = data['memories'];
+      if (memories is List) {
+        for (final raw in memories.take(10000)) {
+          try {
+            final memory = PlaceMemory.fromJson(Map<String, dynamic>.from(raw as Map));
+            result._memories[memory.place.key] = memory;
+          } catch (_) { result.loadFailed = true; }
+        }
+      }
+      result.onlyNewPlaces = data['onlyNewPlaces'] == true;
+      final pending = data['pendingPhotoPlace'];
+      if (pending is String && result._memories.containsKey(pending)) { result.pendingPhotoPlace = pending; }
+      // Migrate older walk history and keep undo consistent with personal marks.
+      for (final walk in result._walks) { result._syncVisits(walk); }
       return result;
     } catch (_) {
       // Never silently report a successful save if the app directory is unavailable.
@@ -100,6 +119,56 @@ class AppStore extends ChangeNotifier {
   List<SavedWalk> get saved => walks.where((w) => !w.complete).toList();
   List<SavedWalk> get history => walks.where((w) => w.complete).toList();
   List<Place> get favorites => List.unmodifiable(_favorites);
+  List<PlaceMemory> get memories => List.unmodifiable(_memories.values);
+  List<Place> get visitedPlaces => memories.where((m) => m.visited).map((m) => m.place).toList();
+  Set<String> get excludedKeys => memories.where((m) => m.excluded).map((m) => m.place.key).toSet();
+  Set<String> get visitedKeys => memories.where((m) => m.visited).map((m) => m.place.key).toSet();
+  PlaceMemory? memory(Place place) => _memories[place.key];
+  bool isVisited(Place place) => memory(place)?.visited ?? false;
+  bool isExcluded(Place place) => memory(place)?.excluded ?? false;
+  bool canSuggest(Place place, {bool? newOnly}) => !isExcluded(place) &&
+    (!(newOnly ?? onlyNewPlaces) || !isVisited(place));
+  PlaceMemory _remember(Place place) => _memories.putIfAbsent(place.key, () => PlaceMemory(place: place));
+  Future<bool> setOnlyNew(bool value) { onlyNewPlaces = value; return _persist(); }
+  Future<bool> setVisited(Place place, bool value) {
+    _remember(place).manualVisit = value ? DateTime.now().toUtc() : null;
+    return _persist();
+  }
+  Future<bool> setExcluded(Place place, bool value) { _remember(place).excluded = value; return _persist(); }
+  Future<bool> saveNote(Place place, String note) {
+    if (note.runes.length > 6000) { throw const FormatException('Note too long'); }
+    _remember(place).note = note.trim(); return _persist();
+  }
+  Future<bool> beginPhoto(Place place) {
+    _remember(place); pendingPhotoPlace = place.key; return _persist();
+  }
+  Future<bool> cancelPhoto() { pendingPhotoPlace = null; return _persist(); }
+  Future<bool> finishPhoto(String name) {
+    if (!validPhotoName(name)) { throw const FormatException('Invalid personal photo'); }
+    final record = _memories[pendingPhotoPlace];
+    if (record == null || record.photos.length >= 20) { throw StateError('Photo target unavailable'); }
+    if (!record.photos.contains(name)) { record.photos.add(name); }
+    pendingPhotoPlace = null; return _persist();
+  }
+  Future<bool> removePhoto(Place place, String name) {
+    _remember(place).photos.remove(name); return _persist();
+  }
+  void _syncVisits(SavedWalk walk) {
+    final session = walk.session;
+    final visited = <String>{};
+    if (session != null) {
+      for (var i = 0; i < session.route.places.length; i++) {
+        if (session.statuses[i] == StopStatus.visited) {
+          final memory = _remember(session.route.places[i]);
+          memory.walkVisits.putIfAbsent(walk.id, () => walk.updated.toUtc());
+          visited.add(memory.place.key);
+        }
+      }
+    }
+    for (final memory in _memories.values) {
+      if (!visited.contains(memory.place.key)) { memory.walkVisits.remove(walk.id); }
+    }
+  }
   SavedWalk? get active {
     for (final walk in _walks) {
       if (!walk.complete && walk.session != null) { return walk; }
@@ -117,6 +186,7 @@ class AppStore extends ChangeNotifier {
     return _persist();
   }
   Future<bool> put(SavedWalk walk) {
+    _syncVisits(walk);
     _walks.removeWhere((w) => w.id == walk.id);
     _walks.insert(0, walk);
     return _persist();
@@ -127,9 +197,11 @@ class AppStore extends ChangeNotifier {
   }
   Future<bool> retry() => _persist();
   Future<bool> _persist() {
-    final snapshot = jsonEncode({'version': 1,
+    final snapshot = jsonEncode({'version': 2,
       'walks': _walks.map((w) => w.toJson()).toList(),
-      'favorites': _favorites.map((p) => p.toJson()).toList()});
+      'favorites': _favorites.map((p) => p.toJson()).toList(),
+      'memories': _memories.values.map((m) => m.toJson()).toList(),
+      'onlyNewPlaces': onlyNewPlaces, 'pendingPhotoPlace': pendingPhotoPlace});
     notifyListeners();
     final operation = _writes.then((_) async {
       try {

@@ -4,6 +4,8 @@ import 'language_settings.dart';
 import 'place_card.dart';
 import 'results_screen.dart';
 import 'saved_data.dart';
+import 'offline_store.dart';
+import 'places.dart';
 
 Future<void> openSavedWalk(BuildContext context, SavedWalk walk) =>
   Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => ResultsScreen(
@@ -19,7 +21,11 @@ class MyPlacesScreen extends StatelessWidget {
       content: Text(tr(context, 'deleteWalkHint')),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr(context, 'cancel'))),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr(context, 'delete')))]));
-    if (accepted == true && context.mounted) { await AppStoreScope.of(context)!.remove(walk.id); }
+    if (accepted == true && context.mounted) {
+      final offline = OfflineScope.of(context);
+      final success = await AppStoreScope.of(context)!.remove(walk.id);
+      if (success && offline != null) { await offline.remove(walk.id); }
+    }
   }
   Widget _walks(BuildContext context, List<SavedWalk> walks, String empty) => ListView(
     padding: const EdgeInsets.all(20), children: [
@@ -40,17 +46,29 @@ class MyPlacesScreen extends StatelessWidget {
           Wrap(spacing: 8, children: [
             FilledButton(onPressed: () => openSavedWalk(context, walk),
               child: Text(tr(context, walk.complete ? 'walkResult' : 'openSavedWalk'))),
-            TextButton(onPressed: () => _delete(context, walk), child: Text(tr(context, 'delete'))),
+            TextButton(onPressed: OfflineScope.of(context)?.busy == true ? null : () => _delete(context, walk),
+              child: Text(tr(context, 'delete'))),
+            if (walk.session != null && OfflineScope.of(context)?.streets(walk.session!.route) != null)
+              TextButton(onPressed: OfflineScope.of(context)?.busy == true ? null : () async {
+                final ok = await OfflineScope.of(context)!.remove(walk.id);
+                if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, ok ? 'offlineRemoved' : 'dataSaveError')))); }
+              }, child: Text(tr(context, 'removeOffline'))),
           ]),
         ]))),
+    ]);
+  Widget _places(BuildContext context, List<Place> places, String empty) => ListView(
+    padding: const EdgeInsets.all(20), children: [const StorageNotice(),
+      if (places.isEmpty) Text(tr(context, empty)),
+      for (final place in places) PlaceCard(place: place, demo: place.osmUrl == null, showDistance: false),
     ]);
   @override
   Widget build(BuildContext context) {
     final store = AppStoreScope.of(context)!;
-    return DefaultTabController(length: 3, child: Scaffold(
+    return DefaultTabController(length: 6, child: Scaffold(
       appBar: AppBar(title: Text(tr(context, 'myPlaces')), actions: const [LanguageMenu()],
-        bottom: TabBar(tabs: [Tab(text: tr(context, 'savedTab')), Tab(text: tr(context, 'favoritesTab')),
-          Tab(text: tr(context, 'historyTab'))])),
+        bottom: TabBar(isScrollable: true, tabs: [Tab(text: tr(context, 'savedTab')), Tab(text: tr(context, 'favoritesTab')),
+          Tab(text: tr(context, 'historyTab')), Tab(text: tr(context, 'visitedTab')),
+          Tab(text: tr(context, 'notesTab')), Tab(text: tr(context, 'excludedTab'))])),
       body: TabBarView(children: [
         _walks(context, store.saved, 'emptySaved'),
         ListView(padding: const EdgeInsets.all(20), children: [
@@ -59,6 +77,9 @@ class MyPlacesScreen extends StatelessWidget {
           for (final place in store.favorites) PlaceCard(place: place, demo: place.osmUrl == null, showDistance: false),
         ]),
         _walks(context, store.history, 'emptyHistory'),
+        _places(context, store.visitedPlaces, 'emptyVisited'),
+        _places(context, store.memories.where((m) => m.hasContent).map((m) => m.place).toList(), 'emptyNotes'),
+        _places(context, store.memories.where((m) => m.excluded).map((m) => m.place).toList(), 'emptyExcluded'),
       ])));
   }
 }

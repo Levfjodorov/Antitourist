@@ -6,13 +6,18 @@ import 'place_card.dart';
 import 'place_details_service.dart';
 import 'place_photo_image.dart';
 import 'place_photo_screen.dart';
+import 'place_translation_service.dart';
 import 'places.dart';
+import 'personal_place_panel.dart';
+import 'offline_store.dart';
+import 'app_store.dart';
 
 class PlaceDetailsScreen extends StatefulWidget {
-  const PlaceDetailsScreen({super.key, required this.place, required this.demo, this.service});
+  const PlaceDetailsScreen({super.key, required this.place, required this.demo, this.service, this.translator});
   final Place place;
   final bool demo;
   final PlaceDetailsService? service;
+  final PlaceTextTranslator? translator;
   @override
   State<PlaceDetailsScreen> createState() => _PlaceDetailsScreenState();
 }
@@ -21,21 +26,103 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   PlaceDetails? details;
   bool loading = false, failed = false;
   String? loadedLanguage;
+  int request = 0;
+  TranslatedPlaceText? translated;
+  bool translating = false, translationFailed = false, showOriginal = false;
+  bool mobileDataAllowed = false;
+  bool fullText = false;
+  DateTime? offlineSaved;
+  PlaceTranslationException? translationError;
   @override
-  void initState() { super.initState(); service = widget.service ?? PlaceDetailsService(); }
+  void initState() { super.initState(); service = widget.service ?? PlaceDetailsService.shared; }
   @override
-  void dispose() { service.close(); super.dispose(); }
-  Future<void> _load() async {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.demo && loadedLanguage != context.strings.language.code) { _load(); }
+  }
+  @override
+  void dispose() {
+    request++;
+    if (widget.service != null) { service.close(); }
+    super.dispose();
+  }
+  Future<void> _load({bool refresh = false}) async {
     final language = context.strings.language.code;
-    setState(() { loading = true; failed = false; details = null; loadedLanguage = language; });
+    final currentRequest = ++request;
+    setState(() {
+      loading = true; failed = false; details = null; loadedLanguage = language;
+      translated = null; translating = false; translationFailed = false; showOriginal = false;
+      translationError = null; offlineSaved = null;
+    });
     try {
+      final cached = refresh ? null : OfflineScope.of(context)?.place(widget.place, language);
+      if (cached != null) {
+        if (mounted && currentRequest == request) { setState(() {
+          details = cached.details; translated = cached.translated; loading = false;
+          offlineSaved = cached.saved;
+        }); }
+        return;
+      }
+      if (refresh) { service.invalidate(widget.place, language); }
       final result = await service.load(widget.place, language);
-      if (mounted) { setState(() { details = result; failed = result.partial; }); }
+      if (mounted && currentRequest == request) {
+        setState(() { details = result; failed = result.partial; loading = false; });
+        if (result.textLanguage != null && result.textLanguage != language &&
+            (result.description != null || result.sections.isNotEmpty)) {
+          await _translate(result, language, currentRequest, allowMobileData: mobileDataAllowed);
+        }
+      }
     } catch (_) {
-      if (mounted) { setState(() => failed = true); }
+      if (mounted && currentRequest == request) { setState(() => failed = true); }
     } finally {
-      if (mounted) { setState(() => loading = false); }
+      if (mounted && currentRequest == request) { setState(() => loading = false); }
     }
+  }
+  Future<void> _translate(PlaceDetails original, String language, int currentRequest,
+      {bool allowMobileData = false}) async {
+    setState(() { translating = true; translationFailed = false; translationError = null; });
+    try {
+      final result = await (widget.translator ?? PlaceTranslationService.shared)
+        .translate(original, language, allowMobileData: allowMobileData);
+      if (mounted && currentRequest == request) {
+        setState(() { translated = result; showOriginal = false; });
+      }
+    } catch (error) {
+      if (mounted && currentRequest == request) {
+        setState(() {
+          translationFailed = true;
+          translationError = error is PlaceTranslationException ? error :
+            PlaceTranslationException(TranslationProblem.failed, diagnostic: error.toString());
+        });
+      }
+    } finally {
+      if (mounted && currentRequest == request) { setState(() => translating = false); }
+    }
+  }
+  void _retryTranslation({bool allowMobileData = false}) {
+    if (translating) { return; }
+    final original = details;
+    if (original != null) {
+      mobileDataAllowed = mobileDataAllowed || allowMobileData;
+      _translate(original, context.strings.language.code, ++request, allowMobileData: mobileDataAllowed);
+    }
+  }
+  String _translationErrorKey() => switch (translationError?.problem) {
+    TranslationProblem.wifiRequired => 'translationWifiRequired',
+    TranslationProblem.offline => 'translationOffline',
+    TranslationProblem.downloadTimeout => 'translationTimeout',
+    TranslationProblem.unavailable => 'translationUnavailable',
+    _ => 'translationError',
+  };
+  String _displayName(PlaceDetails? info) {
+    final original = context.strings.name(widget.place);
+    final title = translated?.title;
+    final articleTitle = info?.articleTitle;
+    String normalize(String value) => value.replaceAll('_', ' ').trim().toLowerCase();
+    if (!showOriginal && title != null && articleTitle != null &&
+        widget.place.tags['name:${context.strings.language.code}'] == null &&
+        normalize(original) == normalize(articleTitle)) { return title; }
+    return original;
   }
   void _openPhoto(PlacePhoto photo, List<PlacePhoto> photos) {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PlacePhotoScreen(
@@ -61,6 +148,124 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         else Text(photo.license),
       ]),
     ]);
+  List<Widget> _information(PlaceDetails? info, PlacePhoto? photo, List<PlacePhoto> photos) => [
+    const SizedBox(height: 16),
+    Text(tr(context, 'moreInfoTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    if (loading) SizedBox(height: 180, child: Center(child: Column(
+      mainAxisSize: MainAxisSize.min, children: [
+        const CircularProgressIndicator(), const SizedBox(height: 12),
+        Text(tr(context, 'detailsLoading')),
+      ]))),
+    if (info != null) ...[
+      if (offlineSaved != null) ...[
+        Text(tr(context, 'offlineSavedAt', {'date': MaterialLocalizations.of(context).formatMediumDate(offlineSaved!.toLocal())})),
+        TextButton.icon(onPressed: () => _load(refresh: true), icon: const Icon(Icons.refresh), label: Text(tr(context, 'refreshInfo'))),
+      ],
+      for (final fact in info.facts) ListTile(contentPadding: EdgeInsets.zero,
+        title: Text(tr(context, fact.key)), subtitle: SelectableText(fact.value),
+        trailing: IconButton(tooltip: tr(context, 'source'), icon: const Icon(Icons.source_outlined),
+          onPressed: () => openInApp(context, fact.source))),
+      if (info.localRecords.isNotEmpty) Card(child: Padding(padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tr(context, 'localHeritage')),
+          for (final record in info.localRecords) ...[
+            if (record.type == 'KPO_LIIK_EHITISMALESTIS') Text(tr(context, 'heritageArchitectural')),
+            TextButton(onPressed: () => openInApp(context, record.source),
+              child: Text(tr(context, 'heritageRecord', {'number': record.number}))),
+          ],
+          Text(tr(context, 'heritageCredit'), style: Theme.of(context).textTheme.bodySmall),
+        ]))),
+      Text(tr(context, 'visitEstimate')),
+      if (info.articleDistanceMeters case final double distance)
+        Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(tr(context, 'discoveredArticle', {'distance': distance.round()}),
+            style: Theme.of(context).textTheme.bodySmall)),
+      if (photo != null) _photo(photo, context.strings.name(widget.place), photos)
+      else if (!info.partial) Padding(padding: const EdgeInsets.only(top: 12),
+        child: Text(tr(context, 'noPhoto'))),
+      if (translating || translationFailed) ...[
+        const SizedBox(height: 12),
+        Text(tr(context, translating ? 'translationLoading' : _translationErrorKey())),
+        if (translating) const LinearProgressIndicator(),
+        Text(tr(context, 'translationDownloadHint'), style: Theme.of(context).textTheme.bodySmall),
+        if (translating) Text(tr(context, 'translationPleaseWait')),
+        if (translationError?.diagnostic.isNotEmpty == true) ExpansionTile(
+          key: const ValueKey('translation-diagnostic'), tilePadding: EdgeInsets.zero,
+          title: Text(tr(context, 'translationDiagnostic')),
+          children: [SelectableText(translationError!.diagnostic)]),
+        Wrap(spacing: 8, children: [
+          if (translationFailed) TextButton.icon(key: const ValueKey('retry-translation'),
+            onPressed: _retryTranslation, icon: const Icon(Icons.refresh),
+            label: Text(tr(context, 'retryTranslation'))),
+          TextButton.icon(key: const ValueKey('translation-mobile-data'),
+            onPressed: translating ? null : () => _retryTranslation(allowMobileData: true),
+            icon: const Icon(Icons.download), label: Text(tr(context, 'translationMobileData'))),
+        ]),
+      ],
+      if (translated != null) ...[
+        const SizedBox(height: 12),
+        TextButton(key: const ValueKey('toggle-original-text'),
+          onPressed: () => setState(() => showOriginal = !showOriginal),
+          child: Text(tr(context, showOriginal ? 'showTranslation' : 'showOriginal'))),
+        Text(tr(context, showOriginal ? 'translationOriginal' : 'translationAutomatic', {
+          'source': info.textLanguage ?? '—', 'target': context.strings.language.code,
+        })),
+        if (!showOriginal) Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Semantics(label: 'powered by Google Translate', child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+              const Text('powered by'),
+              Image.asset('assets/branding/google_logo.png', height: 20, semanticLabel: 'Google'),
+              const Text('Translate'),
+            ]))),
+        if (!showOriginal) Text(tr(context, 'translationAccuracy')),
+      ],
+      if ((!showOriginal ? translated?.description : null) ?? info.description case final description?) ...[
+        const SizedBox(height: 16), SelectableText(fullText || description.runes.length <= 600
+          ? description : '${String.fromCharCodes(description.runes.take(600))}…'),
+        if (description.runes.length > 600) TextButton(onPressed: () => setState(() => fullText = !fullText),
+          child: Text(tr(context, fullText ? 'collapseText' : 'readFullText'))),
+      ],
+      for (final section in (!showOriginal ? translated?.sections : null) ?? info.sections) ExpansionTile(
+        initiallyExpanded: true, tilePadding: EdgeInsets.zero, title: Text(section.title), children: [SelectableText(section.text)]),
+      if (info.description == null && info.sections.isEmpty && !info.partial)
+        Padding(padding: const EdgeInsets.only(top: 12), child: Text(tr(context, 'noExtraInfo'))),
+      if (info.textTruncated) Text(tr(context, 'articleTruncated')),
+      if (info.description != null || info.sections.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        if (info.article?.host.endsWith('.wikipedia.org') == true)
+          Text(tr(context, 'wikipediaAttribution', {
+            'title': info.articleTitle ?? context.strings.name(widget.place),
+            'language': info.textLanguage ?? '—',
+          }), style: Theme.of(context).textTheme.bodySmall)
+        else Text(tr(context, 'sourceLanguageHint')),
+      ],
+      if (info.article != null) Wrap(spacing: 8, children: [
+        TextButton.icon(onPressed: () => openInApp(context, info.article!),
+          icon: const Icon(Icons.source_outlined), label: Text(tr(context, 'articleSource'))),
+        if (info.article?.host.endsWith('.wikipedia.org') == true)
+          TextButton(onPressed: () => openInApp(context,
+            Uri.parse('https://creativecommons.org/licenses/by-sa/4.0/')),
+            child: Text(tr(context, 'wikipediaLicense'))),
+      ]),
+      if (info.nearbyPhotos.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        Text(tr(context, 'nearbyPhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(tr(context, 'nearbyPhotosHint')),
+        for (final nearby in info.nearbyPhotos) ...[
+          Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
+          _photo(nearby, tr(context, 'nearbyPhotosTitle'), photos),
+        ],
+      ],
+    ],
+    if (failed) ...[
+      const SizedBox(height: 12), Text(tr(context, 'detailsError')),
+      OutlinedButton.icon(key: const ValueKey('retry-place-details'), onPressed: loading ? null : _load,
+        icon: const Icon(Icons.refresh), label: Text(tr(context, 'retryDetails'))),
+    ],
+    const SizedBox(height: 12),
+    Text(tr(context, 'photoPrivacy'), style: Theme.of(context).textTheme.bodySmall),
+    const Divider(height: 32),
+  ];
   @override
   Widget build(BuildContext context) {
     final place = widget.place;
@@ -77,11 +282,16 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     return Scaffold(appBar: AppBar(title: Text(tr(context, 'placeDetails')), actions: const [LanguageMenu()]),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: Text(context.strings.name(place), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
+          Expanded(child: Text(_displayName(info), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
           FavoriteButton(place: place),
         ]),
         Text(context.strings.category(place.category)),
+        if (!widget.demo) ..._information(info, photo, photos),
         const SizedBox(height: 12),
+        ExpansionTile(key: const ValueKey('personal-place-panel'),
+          initiallyExpanded: AppStoreScope.of(context)?.memory(place)?.hasContent == true,
+          title: Text(tr(context, 'myPlaceTitle')),
+          children: [PersonalPlacePanel(place: place)]),
         Text(tr(context, 'reason_${place.category}')),
         const SizedBox(height: 12),
         Text(context.strings.description(place)),
@@ -109,37 +319,6 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
           if (website == null && websiteLabel != null) SelectableText(tr(context, 'websiteRaw', {'value': websiteLabel})),
           if (place.osmUrl != null) TextButton.icon(onPressed: () => openInApp(context, place.osmUrl!),
             icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'source'))),
-          const Divider(height: 32),
-          Text(tr(context, 'moreInfoTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(tr(context, 'photoPrivacy')),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(onPressed: loading ? null : _load,
-            icon: loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.photo_outlined),
-            label: Text(tr(context, loading ? 'detailsLoading' : 'loadDetails'))),
-          if (failed) Text(tr(context, 'detailsError')),
-          if (info != null) ...[
-            if (photo != null) _photo(photo, context.strings.name(place), photos)
-            else if (!info.partial) Text(tr(context, 'noPhoto')),
-            if (info.nearbyPhotos.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(tr(context, 'nearbyPhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              Text(tr(context, 'nearbyPhotosHint')),
-              for (final nearby in info.nearbyPhotos) ...[
-                Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
-                _photo(nearby, tr(context, 'nearbyPhotosTitle'), photos),
-              ],
-            ],
-            if (info.description != null) ...[
-              const SizedBox(height: 12), SelectableText(info.description!),
-              Text(tr(context, 'sourceLanguageHint')),
-            ] else if (!info.partial) Text(tr(context, 'noExtraInfo')),
-            if (info.article != null) TextButton.icon(onPressed: () => openInApp(context, info.article!),
-              icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'articleSource'))),
-            if (info.description != null && info.article?.host.endsWith('.wikipedia.org') == true)
-              TextButton(onPressed: () => openInApp(context, Uri.parse('https://en.wikipedia.org/wiki/Wikipedia:Copyrights')),
-                child: Text(tr(context, 'wikipediaLicense'))),
-          ],
           const Divider(height: 32),
           Text(tr(context, 'googlePhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           Text(tr(context, 'googlePhotosHint')),

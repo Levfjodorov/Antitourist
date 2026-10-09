@@ -7,6 +7,7 @@ import 'place_card.dart';
 import 'language_settings.dart';
 import 'places.dart';
 import 'walking_route.dart';
+import 'offline_store.dart';
 
 Widget osmAttribution(BuildContext context) => SimpleAttributionWidget(
   source: const Text('OpenStreetMap contributors'),
@@ -19,9 +20,12 @@ class RouteMap extends StatelessWidget {
   final GeoPoint start;
   final WalkingRoute? route;
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final streets = route == null ? null : OfflineScope.of(context)?.streets(route!);
+    return Scaffold(
     appBar: AppBar(actions: const [LanguageMenu()], title: Text(route == null ? tr(context, 'mapPlaces') : tr(context, 'mapRoute'))),
     body: Column(children: [
+      if (streets != null) Padding(padding: const EdgeInsets.all(8), child: Text(tr(context, 'offlineMap'))),
       Padding(padding: const EdgeInsets.all(12), child: Text(demo
         ? tr(context, 'demoBanner')
         : route == null ? tr(context, 'mapHint')
@@ -30,7 +34,8 @@ class RouteMap extends StatelessWidget {
         Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(tr(context, 'entranceHint'))),
       Expanded(child: FlutterMap(
-        options: MapOptions(initialCenter: LatLng(start.lat, start.lon), initialZoom: 13,
+        options: MapOptions(backgroundColor: streets == null ? const Color(0xffe0e0e0) : const Color(0xff233129),
+          initialCenter: LatLng(start.lat, start.lon), initialZoom: 13,
           initialCameraFit: CameraFit.bounds(
             bounds: LatLngBounds.fromPoints([
               LatLng(start.lat, start.lon),
@@ -39,8 +44,17 @@ class RouteMap extends StatelessWidget {
             ], drawInSingleWorld: true),
             padding: const EdgeInsets.all(44), maxZoom: 16)),
         children: [
-          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          if (streets == null) TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.antitourist.antitourist', maxNativeZoom: 19),
+          if (streets != null) ...[
+            PolygonLayer(polygons: [for (final street in streets.where((s) => s.kind != 'road'))
+              Polygon(points: street.points.map((p) => LatLng(p.lat, p.lon)).toList(),
+                color: street.kind == 'water' ? const Color(0xff6088a0) : const Color(0xff3a6142),
+                borderStrokeWidth: 0)]),
+            PolylineLayer(polylines: [for (final street in streets.where((s) => s.kind == 'road'))
+              Polyline(points: street.points.map((p) => LatLng(p.lat, p.lon)).toList(),
+                strokeWidth: 3, color: const Color(0xffc6c4b5))]),
+          ],
           if (route != null) PolylineLayer(polylines: [Polyline(
             points: [for (final point in route!.geometry) LatLng(point.lat, point.lon)],
             strokeWidth: 5, color: const Color(0xff246bfd))]),
@@ -92,6 +106,7 @@ class RouteMap extends StatelessWidget {
               child: Text(tr(context, 'fixMap'))),
           ]))),
     ]));
+  }
 }
 
 class StartPicker extends StatefulWidget {

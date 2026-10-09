@@ -43,6 +43,8 @@ class PlaceCard extends StatelessWidget {
         FavoriteButton(place: place),
       ]),
       Text(context.strings.category(place.category), style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+      if (AppStoreScope.of(context)?.isVisited(place) == true) Text(tr(context, 'visitedPlace')),
+      if (AppStoreScope.of(context)?.isExcluded(place) == true) Text(tr(context, 'excludedTab')),
       const SizedBox(height: 8),
       Text(tr(context, 'reason_${place.category}')),
       if (demo) Text(tr(context, 'fictionalPlace'))
