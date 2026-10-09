@@ -45,11 +45,26 @@ jobs:
           cache: true
       - name: Check Android toolchain
         run: flutter doctor -v
+      - name: Select signing mode
+        id: signing
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          PERMANENT_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          REQUEST_RELEASE: ${{ inputs.release_signing || false }}
+        run: |
+          if [ "$GITHUB_REF" = 'refs/heads/main' ] && [ "$GITHUB_EVENT_NAME" != 'pull_request' ] && [ -n "$PERMANENT_KEY" ]; then
+            echo 'release=true' >> "$GITHUB_OUTPUT"
+          elif [ "$REQUEST_RELEASE" = 'true' ]; then
+            echo '::error::Configure the permanent Android signing secrets before a release build.'
+            exit 1
+          else
+            echo 'release=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Analyze, test, and build test APK
-        if: ${{ !inputs.release_signing }}
+        if: ${{ steps.signing.outputs.release != 'true' }}
         run: python3 scripts/build_android.py
       - name: Analyze, test, and build signed release APK
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_signing }}
+        if: ${{ steps.signing.outputs.release == 'true' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/antitourist-release.jks
@@ -114,7 +129,7 @@ jobs:
             "$RUNNER_TEMP/release-signing-smoke.apk" "$RUNNER_TEMP/release-signing-smoke.apk.idsig"
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: AntiTourist-Android-${{ inputs.release_signing && 'release' || 'test' }}-${{ github.run_number }}
+          name: AntiTourist-Android-${{ steps.signing.outputs.release == 'true' && 'release' || 'test' }}-${{ github.run_number }}
           path: |
             dist/*.apk
             dist/flutter-version.json

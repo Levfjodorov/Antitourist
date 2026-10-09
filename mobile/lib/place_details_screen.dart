@@ -8,6 +8,9 @@ import 'place_photo_image.dart';
 import 'place_photo_screen.dart';
 import 'place_translation_service.dart';
 import 'places.dart';
+import 'personal_place_panel.dart';
+import 'offline_store.dart';
+import 'app_store.dart';
 
 class PlaceDetailsScreen extends StatefulWidget {
   const PlaceDetailsScreen({super.key, required this.place, required this.demo, this.service, this.translator});
@@ -27,6 +30,8 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   TranslatedPlaceText? translated;
   bool translating = false, translationFailed = false, showOriginal = false;
   bool mobileDataAllowed = false;
+  bool fullText = false;
+  DateTime? offlineSaved;
   PlaceTranslationException? translationError;
   @override
   void initState() { super.initState(); service = widget.service ?? PlaceDetailsService.shared; }
@@ -41,15 +46,24 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     if (widget.service != null) { service.close(); }
     super.dispose();
   }
-  Future<void> _load() async {
+  Future<void> _load({bool refresh = false}) async {
     final language = context.strings.language.code;
     final currentRequest = ++request;
     setState(() {
       loading = true; failed = false; details = null; loadedLanguage = language;
       translated = null; translating = false; translationFailed = false; showOriginal = false;
-      translationError = null;
+      translationError = null; offlineSaved = null;
     });
     try {
+      final cached = refresh ? null : OfflineScope.of(context)?.place(widget.place, language);
+      if (cached != null) {
+        if (mounted && currentRequest == request) { setState(() {
+          details = cached.details; translated = cached.translated; loading = false;
+          offlineSaved = cached.saved;
+        }); }
+        return;
+      }
+      if (refresh) { service.invalidate(widget.place, language); }
       final result = await service.load(widget.place, language);
       if (mounted && currentRequest == request) {
         setState(() { details = result; failed = result.partial; loading = false; });
@@ -143,6 +157,25 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         Text(tr(context, 'detailsLoading')),
       ]))),
     if (info != null) ...[
+      if (offlineSaved != null) ...[
+        Text(tr(context, 'offlineSavedAt', {'date': MaterialLocalizations.of(context).formatMediumDate(offlineSaved!.toLocal())})),
+        TextButton.icon(onPressed: () => _load(refresh: true), icon: const Icon(Icons.refresh), label: Text(tr(context, 'refreshInfo'))),
+      ],
+      for (final fact in info.facts) ListTile(contentPadding: EdgeInsets.zero,
+        title: Text(tr(context, fact.key)), subtitle: SelectableText(fact.value),
+        trailing: IconButton(tooltip: tr(context, 'source'), icon: const Icon(Icons.source_outlined),
+          onPressed: () => openInApp(context, fact.source))),
+      if (info.localRecords.isNotEmpty) Card(child: Padding(padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tr(context, 'localHeritage')),
+          for (final record in info.localRecords) ...[
+            if (record.type == 'KPO_LIIK_EHITISMALESTIS') Text(tr(context, 'heritageArchitectural')),
+            TextButton(onPressed: () => openInApp(context, record.source),
+              child: Text(tr(context, 'heritageRecord', {'number': record.number}))),
+          ],
+          Text(tr(context, 'heritageCredit'), style: Theme.of(context).textTheme.bodySmall),
+        ]))),
+      Text(tr(context, 'visitEstimate')),
       if (info.articleDistanceMeters case final double distance)
         Padding(padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(tr(context, 'discoveredArticle', {'distance': distance.round()}),
@@ -187,13 +220,13 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         if (!showOriginal) Text(tr(context, 'translationAccuracy')),
       ],
       if ((!showOriginal ? translated?.description : null) ?? info.description case final description?) ...[
-        const SizedBox(height: 16), SelectableText(description),
+        const SizedBox(height: 16), SelectableText(fullText || description.runes.length <= 600
+          ? description : '${String.fromCharCodes(description.runes.take(600))}…'),
+        if (description.runes.length > 600) TextButton(onPressed: () => setState(() => fullText = !fullText),
+          child: Text(tr(context, fullText ? 'collapseText' : 'readFullText'))),
       ],
-      for (final section in (!showOriginal ? translated?.sections : null) ?? info.sections) ...[
-        const SizedBox(height: 16),
-        Text(section.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8), SelectableText(section.text),
-      ],
+      for (final section in (!showOriginal ? translated?.sections : null) ?? info.sections) ExpansionTile(
+        initiallyExpanded: true, tilePadding: EdgeInsets.zero, title: Text(section.title), children: [SelectableText(section.text)]),
       if (info.description == null && info.sections.isEmpty && !info.partial)
         Padding(padding: const EdgeInsets.only(top: 12), child: Text(tr(context, 'noExtraInfo'))),
       if (info.textTruncated) Text(tr(context, 'articleTruncated')),
@@ -255,6 +288,10 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         Text(context.strings.category(place.category)),
         if (!widget.demo) ..._information(info, photo, photos),
         const SizedBox(height: 12),
+        ExpansionTile(key: const ValueKey('personal-place-panel'),
+          initiallyExpanded: AppStoreScope.of(context)?.memory(place)?.hasContent == true,
+          title: Text(tr(context, 'myPlaceTitle')),
+          children: [PersonalPlacePanel(place: place)]),
         Text(tr(context, 'reason_${place.category}')),
         const SizedBox(height: 12),
         Text(context.strings.description(place)),

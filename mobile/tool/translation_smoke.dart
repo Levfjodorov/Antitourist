@@ -1,5 +1,6 @@
 // Separate release entry point used only by the Android translation smoke job.
 import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import 'package:antitourist/place_details_service.dart';
 import 'package:antitourist/place_translation_service.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MaterialApp(home: Scaffold(body: Center(child: Text('Translation smoke test')))));
   try {
+    // Verify image_picker is registered and survives release-mode shrinking.
+    await ImagePicker().retrieveLostData();
     const original = PlaceDetails(articleTitle: 'Tondipoiste monument', textLanguage: 'et',
       description: 'Mälestusmärk avati 1928. aastal.',
       sections: [PlaceArticleSection('Ajalugu', 'Mälestusmärk taastati 2009. aastal.')]);
@@ -33,7 +36,7 @@ Future<void> main() async {
       throw StateError('Native translation did not produce Russian text');
     }
     debugPrint('ANTITOURIST_TRANSLATION_RESULT=${jsonEncode({
-      'ok': true, 'simulatedCellularPolicyRetry': true, 'wifiTransport': network?['wifi'],
+      'ok': true, 'photoPickerRegistered': true, 'simulatedCellularPolicyRetry': true, 'wifiTransport': network?['wifi'],
       'description': result.description, 'section': result.sections.single.text,
     })}');
   } catch (error, stack) {

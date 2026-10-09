@@ -2,22 +2,25 @@ import 'dart:convert';
 import 'package:html/parser.dart' show parseFragment;
 import 'package:http/http.dart' as http;
 import 'places.dart';
+import 'place_information.dart';
+import 'estonia_heritage.dart';
 
-const wikimediaUserAgent = 'AntiTourist/0.5.8 (https://github.com/Levfjodorov/Antitourist)';
+const wikimediaUserAgent = 'AntiTourist/0.6.0 (https://github.com/Levfjodorov/Antitourist)';
 
 class PlacePhoto {
   const PlacePhoto({required this.url, required this.source, required this.credit,
-    required this.license, this.licenseUrl, this.caption, this.nearbyMeters});
+    required this.license, this.licenseUrl, this.caption, this.nearbyMeters, this.localPath});
   final Uri url, source;
   final String credit, license;
   final Uri? licenseUrl;
   final String? caption;
   final double? nearbyMeters;
+  final String? localPath;
 }
 class PlaceDetails {
   const PlaceDetails({this.description, this.article, this.photo, this.nearbyPhotos = const [],
     this.sections = const [], this.textLanguage, this.articleTitle, this.textTruncated = false,
-    this.partial = false, this.articleDistanceMeters});
+    this.partial = false, this.articleDistanceMeters, this.facts = const [], this.localRecords = const []});
   final String? description;
   final Uri? article;
   final PlacePhoto? photo;
@@ -27,6 +30,8 @@ class PlaceDetails {
   // Set only for an article discovered by matching a name and coordinates.
   final double? articleDistanceMeters;
   final bool partial, textTruncated;
+  final List<PlaceFact> facts;
+  final List<LocalPlaceRecord> localRecords;
 }
 
 class PlaceArticleSection {
@@ -179,13 +184,15 @@ List<PlacePhoto> parseNearbyPhotos(Map<String, dynamic> data, GeoPoint origin) {
 }
 
 class PlaceDetailsService {
-  PlaceDetailsService({http.Client? client}) : _client = client ?? http.Client();
+  PlaceDetailsService({http.Client? client, this.heritage}) : _client = client ?? http.Client();
   // Reuse successful downloads when a card is reopened during this app session.
-  static final shared = PlaceDetailsService();
+  static final shared = PlaceDetailsService(heritage: EstoniaHeritageService.shared);
+  final EstoniaHeritageService? heritage;
   final http.Client _client;
   final _cache = <String, PlaceDetails>{};
   final _pending = <String, Future<PlaceDetails>>{};
   void close() => _client.close();
+  void invalidate(Place place, String language) => _cache.remove('${place.key}:$language');
   Future<Map<String, dynamic>> _get(Uri uri) async {
     final response = await _client.get(uri, headers: {
       'User-Agent': wikimediaUserAgent,
@@ -251,6 +258,15 @@ class PlaceDetailsService {
   Future<PlaceDetails> _load(Place place, String language, String key) async {
     if (place.osmUrl == null) { return const PlaceDetails(); }
     var failed = false;
+    var localRecords = <LocalPlaceRecord>[];
+    final localRequest = heritage?.load(place).catchError((Object error) {
+      failed = true; return <LocalPlaceRecord>[];
+    });
+    final facts = <PlaceFact>[
+      for (final tag in ['start_date', 'artist_name', 'architect', 'material'])
+        if (place.tags[tag] case final String value when value.trim().isNotEmpty)
+          PlaceFact(key: 'fact_$tag', value: value, source: place.osmUrl!),
+    ];
     String? filename, summary, title, articleLanguage;
     var sections = <PlaceArticleSection>[];
     var textTruncated = false;
@@ -287,6 +303,21 @@ class PlaceDetailsService {
       try {
         final entityData = await _get(Uri.https('www.wikidata.org', '/wiki/Special:EntityData/$wikidata.json'));
         final entity = entityData['entities']?[wikidata] as Map?;
+        for (final property in {'P571': 'fact_inception', 'P1619': 'fact_opened'}.entries) {
+          final dates = entity?['claims']?[property.key];
+          if (dates is! List) { continue; }
+          for (final claim in dates) {
+            if (claim['rank'] == 'deprecated') { continue; }
+            final value = claim['mainsnak']?['datavalue']?['value'];
+            if (value is! Map || value['precision'] is! num || value['precision'] < 9) { continue; }
+            final date = RegExp(r'^\+([0-9]{4,})-').firstMatch(value['time']?.toString() ?? '');
+            if (date != null) {
+              facts.add(PlaceFact(key: property.value, value: int.parse(date[1]!).toString(),
+                source: Uri.https('www.wikidata.org', '/wiki/$wikidata')));
+              break;
+            }
+          }
+        }
         final claims = entity?['claims']?['P18'];
         if (filename == null && claims is List) {
           for (final claim in claims) {
@@ -375,10 +406,18 @@ class PlaceDetailsService {
         nearby = parseNearbyPhotos(data, place.point);
       } catch (_) { failed = true; }
     }
+    if (localRequest != null) {
+      try { localRecords = await localRequest; } catch (_) { failed = true; }
+    }
+    if (summary == null && sections.isEmpty && localRecords.isNotEmpty) {
+      summary = localRecords.first.title;
+      article = localRecords.first.source;
+      articleLanguage = 'et';
+    }
     final result = PlaceDetails(description: summary, article: article, photo: photo,
       nearbyPhotos: nearby, sections: sections, textLanguage: articleLanguage,
       articleTitle: title, textTruncated: textTruncated, partial: failed,
-      articleDistanceMeters: articleDistance);
+      articleDistanceMeters: articleDistance, facts: facts, localRecords: localRecords);
     if (!failed) {
       if (_cache.length >= 30) { _cache.remove(_cache.keys.first); }
       _cache[key] = result;

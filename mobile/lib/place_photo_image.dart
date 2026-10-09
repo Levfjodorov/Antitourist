@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'language_settings.dart';
 import 'place_details_service.dart';
@@ -18,8 +19,9 @@ class PlacePhotoImage extends StatefulWidget {
 class _PlacePhotoImageState extends State<PlacePhotoImage> {
   int attempt = 0;
 
-  NetworkImage get provider => NetworkImage(widget.photo.url.toString(),
-    headers: const {'User-Agent': wikimediaUserAgent});
+  ImageProvider get provider => widget.photo.localPath == null
+    ? NetworkImage(widget.photo.url.toString(), headers: const {'User-Agent': wikimediaUserAgent})
+    : FileImage(File(widget.photo.localPath!));
 
   Future<void> _retry() async {
     await provider.evict();

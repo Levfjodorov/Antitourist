@@ -141,6 +141,7 @@ List<Place> rankLivePlaces(List<Place> places, {
   required GeoPoint start, required int radius, required int minutes,
   required int wildness, required Set<String> interests,
   bool onlyPublicAccess = false,
+  Set<String> visitedKeys = const {},
 }) {
   final pool = places.where((p) => interests.contains(p.category) &&
       (!onlyPublicAccess || p.legalAccess)).toList();
@@ -150,7 +151,7 @@ List<Place> rankLivePlaces(List<Place> places, {
   final weight = 0.35 + wildness.clamp(0, 100) / 100 * 0.5;
   double value(Place p) => p.score * weight +
       100 * (1 - p.distance / radius).clamp(0, 1) * (1 - weight) -
-      (counts[p.category] ?? 0) * 12;
+      (counts[p.category] ?? 0) * 12 - (visitedKeys.contains(p.key) ? 25 : 0);
   while (pool.isNotEmpty && chosen.length < count) {
     pool.sort((a, b) {
       final score = value(b).compareTo(value(a));

@@ -1,5 +1,9 @@
 /build/
 /dist/
+/mobile/build/
+/mobile/.flutter-plugins-dependencies
+/mobile/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+**/github-signing-secrets.json
 **/.dart_tool/
 **/__pycache__/
 *.py[cod]

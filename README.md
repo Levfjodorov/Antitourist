@@ -40,6 +40,43 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
+## Android 0.6.0
+
+Walks can be prepared for offline use after routing. Preparation saves route
+geometry, an OSM vector street map (roads, parks and water), place cards, licensed
+Commons images with attribution, and the selected-language translation. The
+saved map makes no raster-tile requests. Partial downloads are labeled honestly
+and can be resumed. The offline cache is persistent, backed up and removable
+per walk; shared images stay until no prepared walk needs them. Preparation
+needs internet. First-time translation models use Wi-Fi unless the user chooses
+mobile data. Building a new route and opening remote sources still need internet.
+
+Cards add source-linked dates, artist, architect and material from OSM/Wikidata,
+a compact introduction with full text available, and a labeled visit estimate.
+Estonian points can also use the official Muinsuskaitseamet/Geoportaal WFS service.
+A numeric `ref:kmr` or a unique exact name within 200 m is required; nearby monuments
+are not automatically attached. Registry facts and the official record link are
+available, with the Estonian registry title translated when it fills a missing
+description. The registry website currently blocks server-side text retrieval,
+so this build does not promise its complete historical articles. Ajapaik photos
+are not fetched because the available endpoint does not supply a photo license.
+
+Personal notes, manual visits, exclusions and up to 20 photos per place are
+saved privately on the phone. Camera/gallery files are copied into permanent
+app storage; Android's lost-picker result is recovered only for the persisted
+pending place. Visits in saved walks migrate to the visit ledger. Undo removes
+the corresponding walk visit; removing the walk itself retains past visits.
+Unvisited places rank higher, and an explicit filter excludes all visited places.
+Exclusions apply to initial selection, replacement and another selection.
+The My Walks screen includes visited, notes/photos and excluded-place tabs.
+
+Main-branch builds automatically use the permanent keystore once all four
+signing secrets are configured. PR builds remain separate test APKs.
+`scripts/setup_android_signing.py` prepares one private key, refuses to overwrite
+an existing identity, and can install secrets through GitHub CLI using stdin.
+The first transition from old debug builds needs a one-time reinstall; later
+APKs with this permanent key update in place without deleting app data.
+
 ## Android 0.5.8
 
 Places without an OSM Wikipedia/Wikidata link now look for Wikipedia articles by
@@ -119,15 +156,16 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.8-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.8-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.6.0-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.6.0-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,
 application ID, version, permissions, and minimum SDK. Release signing requires
-four Actions secrets and an explicit manual run from `main`; it never falls back
-to a debug key. Each future release must increase the build number in `pubspec.yaml`.
+four Actions secrets. Main builds use the configured permanent key automatically;
+a requested release never falls back to a debug key. Each future release must increase the build number in `pubspec.yaml`.
 
-Maps, live search, routing, and remote photos need internet. The Python backend
+Live search, new routes, online maps, and remote sources need internet.
+Prepared walks and their saved street maps, cards, photos and translations work offline. The Python backend
 is independent of the current Android client. Open-data access flags do not
 prove that a location is safe or publicly accessible.
