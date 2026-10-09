@@ -171,10 +171,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.calls, 1);
     expect(find.text('Загрузить сведения и фото'), findsNothing);
-    await tester.scrollUntilVisible(find.text('Built in 1890.'), 200);
+    final cardScroll = find.descendant(of: find.byType(ListView),
+      matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Built in 1890.'), 200, scrollable: cardScroll);
     expect(find.byType(PlacePhotoScreen), findsNothing);
     final button = find.byKey(ValueKey('open-photo:${gallery[1].source}'));
-    await tester.scrollUntilVisible(button, 200);
+    await tester.scrollUntilVisible(button, 200, scrollable: cardScroll);
     await tester.pumpAndSettle();
     await tester.tap(button);
     await tester.pumpAndSettle();
