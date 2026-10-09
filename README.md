@@ -40,7 +40,15 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
-## Android 0.5.4
+## Android 0.5.5
+
+Version 0.5.5 loads photos and linked Wikipedia text automatically when a place
+card opens. The native card shows article sections, including available history,
+with source language, contributor attribution and licenses. No website needs to
+be opened to read them. Successful downloads are reused during the app session;
+failed downloads can be retried. Places without a linked article may have no
+history, and nearby photos remain labeled as nearby. Switching languages reloads
+the text and ignores responses for the previous language.
 
 Version 0.5.4 uses a controlled embedded WebView: Android intent redirects use
 validated HTTPS browser fallbacks, repeated redirects are stopped, and Google
@@ -72,8 +80,8 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.4-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.4-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.5.5-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.5-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,

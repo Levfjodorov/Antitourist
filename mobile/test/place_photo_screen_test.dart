@@ -10,7 +10,6 @@ import 'package:antitourist/strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'route_fixtures.dart';
-import 'test_helpers.dart';
 
 final tinyPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
@@ -72,9 +71,13 @@ final gallery = [for (var index = 0; index < 3; index++) PlacePhoto(
   nearbyMeters: index * 20.0)];
 
 class GalleryDetailsService extends PlaceDetailsService {
+  int calls = 0;
   @override
-  Future<PlaceDetails> load(Place place, String language) async => PlaceDetails(
-    description: 'The place description.', nearbyPhotos: gallery);
+  Future<PlaceDetails> load(Place place, String language) async {
+    calls++;
+    return PlaceDetails(description: 'The place description.', nearbyPhotos: gallery,
+      sections: const [PlaceArticleSection('History', 'Built in 1890.')]);
+  }
 }
 
 void main() {
@@ -165,7 +168,11 @@ void main() {
     final service = GalleryDetailsService();
     await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
       place: routePlaces.first, demo: false, service: service)));
-    await tapVisibleControl(tester, 'Загрузить сведения и фото');
+    await tester.pumpAndSettle();
+    expect(service.calls, 1);
+    expect(find.text('Загрузить сведения и фото'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Built in 1890.'), 200);
+    expect(find.byType(PlacePhotoScreen), findsNothing);
     final button = find.byKey(ValueKey('open-photo:${gallery[1].source}'));
     await tester.scrollUntilVisible(button, 200);
     await tester.pumpAndSettle();
@@ -176,6 +183,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.byType(PlaceDetailsScreen), findsOneWidget);
+    expect(service.calls, 1);
     expect(find.byType(PlacePhotoScreen), findsNothing);
     expect(tester.takeException(), isNull);
   });

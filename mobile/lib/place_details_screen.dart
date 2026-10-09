@@ -21,20 +21,31 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   PlaceDetails? details;
   bool loading = false, failed = false;
   String? loadedLanguage;
+  int request = 0;
   @override
-  void initState() { super.initState(); service = widget.service ?? PlaceDetailsService(); }
+  void initState() { super.initState(); service = widget.service ?? PlaceDetailsService.shared; }
   @override
-  void dispose() { service.close(); super.dispose(); }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.demo && loadedLanguage != context.strings.language.code) { _load(); }
+  }
+  @override
+  void dispose() {
+    request++;
+    if (widget.service != null) { service.close(); }
+    super.dispose();
+  }
   Future<void> _load() async {
     final language = context.strings.language.code;
+    final currentRequest = ++request;
     setState(() { loading = true; failed = false; details = null; loadedLanguage = language; });
     try {
       final result = await service.load(widget.place, language);
-      if (mounted) { setState(() { details = result; failed = result.partial; }); }
+      if (mounted && currentRequest == request) { setState(() { details = result; failed = result.partial; }); }
     } catch (_) {
-      if (mounted) { setState(() => failed = true); }
+      if (mounted && currentRequest == request) { setState(() => failed = true); }
     } finally {
-      if (mounted) { setState(() => loading = false); }
+      if (mounted && currentRequest == request) { setState(() => loading = false); }
     }
   }
   void _openPhoto(PlacePhoto photo, List<PlacePhoto> photos) {
@@ -61,6 +72,65 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         else Text(photo.license),
       ]),
     ]);
+  List<Widget> _information(PlaceDetails? info, PlacePhoto? photo, List<PlacePhoto> photos) => [
+    const SizedBox(height: 16),
+    Text(tr(context, 'moreInfoTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    if (loading) SizedBox(height: 180, child: Center(child: Column(
+      mainAxisSize: MainAxisSize.min, children: [
+        const CircularProgressIndicator(), const SizedBox(height: 12),
+        Text(tr(context, 'detailsLoading')),
+      ]))),
+    if (info != null) ...[
+      if (photo != null) _photo(photo, context.strings.name(widget.place), photos)
+      else if (!info.partial) Padding(padding: const EdgeInsets.only(top: 12),
+        child: Text(tr(context, 'noPhoto'))),
+      if (info.description != null) ...[
+        const SizedBox(height: 16), SelectableText(info.description!),
+      ],
+      for (final section in info.sections) ...[
+        const SizedBox(height: 16),
+        Text(section.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8), SelectableText(section.text),
+      ],
+      if (info.description == null && info.sections.isEmpty && !info.partial)
+        Padding(padding: const EdgeInsets.only(top: 12), child: Text(tr(context, 'noExtraInfo'))),
+      if (info.textTruncated) Text(tr(context, 'articleTruncated')),
+      if (info.description != null || info.sections.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        if (info.article?.host.endsWith('.wikipedia.org') == true)
+          Text(tr(context, 'wikipediaAttribution', {
+            'title': info.articleTitle ?? context.strings.name(widget.place),
+            'language': info.textLanguage ?? '—',
+          }), style: Theme.of(context).textTheme.bodySmall)
+        else Text(tr(context, 'sourceLanguageHint')),
+      ],
+      if (info.article != null) Wrap(spacing: 8, children: [
+        TextButton.icon(onPressed: () => openInApp(context, info.article!),
+          icon: const Icon(Icons.source_outlined), label: Text(tr(context, 'articleSource'))),
+        if (info.article?.host.endsWith('.wikipedia.org') == true)
+          TextButton(onPressed: () => openInApp(context,
+            Uri.parse('https://creativecommons.org/licenses/by-sa/4.0/')),
+            child: Text(tr(context, 'wikipediaLicense'))),
+      ]),
+      if (info.nearbyPhotos.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        Text(tr(context, 'nearbyPhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(tr(context, 'nearbyPhotosHint')),
+        for (final nearby in info.nearbyPhotos) ...[
+          Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
+          _photo(nearby, tr(context, 'nearbyPhotosTitle'), photos),
+        ],
+      ],
+    ],
+    if (failed) ...[
+      const SizedBox(height: 12), Text(tr(context, 'detailsError')),
+      OutlinedButton.icon(key: const ValueKey('retry-place-details'), onPressed: loading ? null : _load,
+        icon: const Icon(Icons.refresh), label: Text(tr(context, 'retryDetails'))),
+    ],
+    const SizedBox(height: 12),
+    Text(tr(context, 'photoPrivacy'), style: Theme.of(context).textTheme.bodySmall),
+    const Divider(height: 32),
+  ];
   @override
   Widget build(BuildContext context) {
     final place = widget.place;
@@ -81,6 +151,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
           FavoriteButton(place: place),
         ]),
         Text(context.strings.category(place.category)),
+        if (!widget.demo) ..._information(info, photo, photos),
         const SizedBox(height: 12),
         Text(tr(context, 'reason_${place.category}')),
         const SizedBox(height: 12),
@@ -109,37 +180,6 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
           if (website == null && websiteLabel != null) SelectableText(tr(context, 'websiteRaw', {'value': websiteLabel})),
           if (place.osmUrl != null) TextButton.icon(onPressed: () => openInApp(context, place.osmUrl!),
             icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'source'))),
-          const Divider(height: 32),
-          Text(tr(context, 'moreInfoTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(tr(context, 'photoPrivacy')),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(onPressed: loading ? null : _load,
-            icon: loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.photo_outlined),
-            label: Text(tr(context, loading ? 'detailsLoading' : 'loadDetails'))),
-          if (failed) Text(tr(context, 'detailsError')),
-          if (info != null) ...[
-            if (photo != null) _photo(photo, context.strings.name(place), photos)
-            else if (!info.partial) Text(tr(context, 'noPhoto')),
-            if (info.nearbyPhotos.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(tr(context, 'nearbyPhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              Text(tr(context, 'nearbyPhotosHint')),
-              for (final nearby in info.nearbyPhotos) ...[
-                Text(tr(context, 'nearbyPhotoDistance', {'distance': nearby.nearbyMeters!.round()})),
-                _photo(nearby, tr(context, 'nearbyPhotosTitle'), photos),
-              ],
-            ],
-            if (info.description != null) ...[
-              const SizedBox(height: 12), SelectableText(info.description!),
-              Text(tr(context, 'sourceLanguageHint')),
-            ] else if (!info.partial) Text(tr(context, 'noExtraInfo')),
-            if (info.article != null) TextButton.icon(onPressed: () => openInApp(context, info.article!),
-              icon: const Icon(Icons.open_in_new), label: Text(tr(context, 'articleSource'))),
-            if (info.description != null && info.article?.host.endsWith('.wikipedia.org') == true)
-              TextButton(onPressed: () => openInApp(context, Uri.parse('https://en.wikipedia.org/wiki/Wikipedia:Copyrights')),
-                child: Text(tr(context, 'wikipediaLicense'))),
-          ],
           const Divider(height: 32),
           Text(tr(context, 'googlePhotosTitle'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           Text(tr(context, 'googlePhotosHint')),

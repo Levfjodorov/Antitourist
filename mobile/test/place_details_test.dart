@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:antitourist/place_details_service.dart';
 import 'package:antitourist/places.dart';
@@ -22,6 +23,52 @@ http.Response jsonResponse(Map<String, dynamic> data) => http.Response(jsonEncod
   headers: {'content-type': 'application/json; charset=utf-8'});
 
 void main() {
+  test('Full linked article includes history and preserves its source language', () async {
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      if (request.url.host == 'www.wikidata.org') {
+        return jsonResponse({'entities': {'Q12': {'sitelinks': {'etwiki': {'title': 'Koht'}}}}});
+      }
+      if (request.url.host == 'et.wikipedia.org') {
+        expect(request.url.queryParameters.containsKey('exintro'), isFalse);
+        expect(request.url.queryParameters.containsKey('exchars'), isFalse);
+        expect(request.url.queryParameters['exsectionformat'], 'wiki');
+        return jsonResponse({'query': {'pages': [{
+          'title': 'Koha nimi', 'fullurl': 'https://et.wikipedia.org/wiki/Koha_nimi',
+          'extract': 'Koha kirjeldus.\n\n== Ajalugu ==\nEhitatud 1890. aastal.\n\n=== Taastamine ===\nTaastatud 1990. aastal.',
+        }]}});
+      }
+      return jsonResponse({'query': {'pages': []}});
+    }));
+    final details = await service.load(linkedPlace({'wikidata': 'Q12'}), 'ru');
+    expect(details.description, 'Koha kirjeldus.');
+    expect(details.sections.map((section) => section.title), ['Ajalugu', 'Taastamine']);
+    expect(details.sections.first.text, 'Ehitatud 1890. aastal.');
+    expect(details.textLanguage, 'et'); expect(details.articleTitle, 'Koha nimi');
+    expect(details.article.toString(), 'https://et.wikipedia.org/wiki/Koha_nimi');
+    expect(details.textTruncated, isFalse);
+    service.close();
+  });
+  test('Concurrent openings share downloads while other languages have their own cache', () async {
+    var requests = 0;
+    final response = Completer<http.Response>();
+    final service = PlaceDetailsService(client: MockClient((request) async {
+      requests++; return response.future;
+    }));
+    final place = linkedPlace({});
+    final first = service.load(place, 'ru');
+    final second = service.load(place, 'ru');
+    response.complete(jsonResponse({'query': {'pages': []}}));
+    await Future.wait([first, second]);
+    await service.load(place, 'ru'); expect(requests, 1);
+    await service.load(place, 'et'); expect(requests, 2);
+    service.close();
+  });
+  test('Long article text is bounded without breaking Unicode and marks shortening', () {
+    final text = parseArticleText('Intro\n\n== History ==\n${List.filled(25000, '😀').join()}');
+    expect(text.lead, 'Intro'); expect(text.sections.single.title, 'History');
+    expect(text.truncated, isTrue);
+    expect(text.sections.single.text.runes.every((rune) => rune == 0x1f600), isTrue);
+  });
   test('Photos require Commons source, Wikimedia image host and attribution', () {
     final photo = parseCommonsPhoto(photoFixture())!;
     expect(photo.credit, 'Photo Author'); expect(photo.license, 'CC BY-SA 4.0');
@@ -98,7 +145,7 @@ void main() {
     final service = PlaceDetailsService(client: MockClient((request) async {
       calls++;
       if (request.url.host == 'en.wikipedia.org') {
-        expect(request.url.queryParameters['prop'], 'extracts|pageimages');
+        expect(request.url.queryParameters['prop'], 'extracts|pageimages|info');
         return jsonResponse({'query': {'pages': [{'extract': 'Description', 'pageimage': 'Place.jpg'}]}});
       }
       expect(request.url.queryParameters['titles'], 'File:Place.jpg');
