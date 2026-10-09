@@ -3,7 +3,7 @@ import 'package:html/parser.dart' show parseFragment;
 import 'package:http/http.dart' as http;
 import 'places.dart';
 
-const wikimediaUserAgent = 'AntiTourist/0.5.6 (https://github.com/Levfjodorov/Antitourist)';
+const wikimediaUserAgent = 'AntiTourist/0.5.7 (https://github.com/Levfjodorov/Antitourist)';
 
 class PlacePhoto {
   const PlacePhoto({required this.url, required this.source, required this.credit,

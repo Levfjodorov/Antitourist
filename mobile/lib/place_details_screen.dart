@@ -26,6 +26,8 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   int request = 0;
   TranslatedPlaceText? translated;
   bool translating = false, translationFailed = false, showOriginal = false;
+  bool mobileDataAllowed = false;
+  PlaceTranslationException? translationError;
   @override
   void initState() { super.initState(); service = widget.service ?? PlaceDetailsService.shared; }
   @override
@@ -45,6 +47,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
     setState(() {
       loading = true; failed = false; details = null; loadedLanguage = language;
       translated = null; translating = false; translationFailed = false; showOriginal = false;
+      translationError = null;
     });
     try {
       final result = await service.load(widget.place, language);
@@ -52,7 +55,7 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         setState(() { details = result; failed = result.partial; loading = false; });
         if (result.textLanguage != null && result.textLanguage != language &&
             (result.description != null || result.sections.isNotEmpty)) {
-          await _translate(result, language, currentRequest);
+          await _translate(result, language, currentRequest, allowMobileData: mobileDataAllowed);
         }
       }
     } catch (_) {
@@ -63,25 +66,40 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
   }
   Future<void> _translate(PlaceDetails original, String language, int currentRequest,
       {bool allowMobileData = false}) async {
-    setState(() { translating = true; translationFailed = false; });
+    setState(() { translating = true; translationFailed = false; translationError = null; });
     try {
       final result = await (widget.translator ?? PlaceTranslationService.shared)
         .translate(original, language, allowMobileData: allowMobileData);
       if (mounted && currentRequest == request) {
         setState(() { translated = result; showOriginal = false; });
       }
-    } catch (_) {
-      if (mounted && currentRequest == request) { setState(() => translationFailed = true); }
+    } catch (error) {
+      if (mounted && currentRequest == request) {
+        setState(() {
+          translationFailed = true;
+          translationError = error is PlaceTranslationException ? error :
+            PlaceTranslationException(TranslationProblem.failed, diagnostic: error.toString());
+        });
+      }
     } finally {
       if (mounted && currentRequest == request) { setState(() => translating = false); }
     }
   }
   void _retryTranslation({bool allowMobileData = false}) {
+    if (translating) { return; }
     final original = details;
     if (original != null) {
-      _translate(original, context.strings.language.code, ++request, allowMobileData: allowMobileData);
+      mobileDataAllowed = mobileDataAllowed || allowMobileData;
+      _translate(original, context.strings.language.code, ++request, allowMobileData: mobileDataAllowed);
     }
   }
+  String _translationErrorKey() => switch (translationError?.problem) {
+    TranslationProblem.wifiRequired => 'translationWifiRequired',
+    TranslationProblem.offline => 'translationOffline',
+    TranslationProblem.downloadTimeout => 'translationTimeout',
+    TranslationProblem.unavailable => 'translationUnavailable',
+    _ => 'translationError',
+  };
   String _displayName(PlaceDetails? info) {
     final original = context.strings.name(widget.place);
     final title = translated?.title;
@@ -130,15 +148,20 @@ class _PlaceDetailsScreenState extends State<PlaceDetailsScreen> {
         child: Text(tr(context, 'noPhoto'))),
       if (translating || translationFailed) ...[
         const SizedBox(height: 12),
-        Text(tr(context, translating ? 'translationLoading' : 'translationError')),
+        Text(tr(context, translating ? 'translationLoading' : _translationErrorKey())),
         if (translating) const LinearProgressIndicator(),
         Text(tr(context, 'translationDownloadHint'), style: Theme.of(context).textTheme.bodySmall),
+        if (translating) Text(tr(context, 'translationPleaseWait')),
+        if (translationError?.diagnostic.isNotEmpty == true) ExpansionTile(
+          key: const ValueKey('translation-diagnostic'), tilePadding: EdgeInsets.zero,
+          title: Text(tr(context, 'translationDiagnostic')),
+          children: [SelectableText(translationError!.diagnostic)]),
         Wrap(spacing: 8, children: [
           if (translationFailed) TextButton.icon(key: const ValueKey('retry-translation'),
             onPressed: _retryTranslation, icon: const Icon(Icons.refresh),
             label: Text(tr(context, 'retryTranslation'))),
           TextButton.icon(key: const ValueKey('translation-mobile-data'),
-            onPressed: () => _retryTranslation(allowMobileData: true),
+            onPressed: translating ? null : () => _retryTranslation(allowMobileData: true),
             icon: const Icon(Icons.download), label: Text(tr(context, 'translationMobileData'))),
         ]),
       ],

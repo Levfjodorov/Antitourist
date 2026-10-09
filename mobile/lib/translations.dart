@@ -1,5 +1,11 @@
 // Complete UI catalogue: Russian, Estonian, English (AppLanguage order).
 const translations = <String, List<String>>{
+  "translationWifiRequired": ["Для загрузки языковых пакетов подключи Wi-Fi или разреши мобильный интернет кнопкой ниже.", "Keelepakettide laadimiseks ühenda Wi-Fi või luba alloleva nupuga mobiilne internet.", "Connect to Wi-Fi or allow mobile data below to download the language packs."],
+  "translationOffline": ["Для загрузки языковых пакетов нужен интернет. Исходный текст сохранён.", "Keelepakettide laadimiseks on vaja internetti. Algtekst on alles.", "Internet is needed to download language packs. The original text is kept."],
+  "translationTimeout": ["Загрузка языкового пакета не завершилась вовремя. Проверь соединение и повтори перевод.", "Keelepaketi laadimine ei lõppenud õigeaegselt. Kontrolli ühendust ja proovi uuesti.", "The language-pack download timed out. Check your connection and retry."],
+  "translationUnavailable": ["Переводчик не запустился на этом устройстве. Открой детали ошибки ниже.", "Tõlkija ei käivitunud selles seadmes. Ava allolevad veateated.", "The translator could not start on this device. Open the error details below."],
+  "translationDiagnostic": ["Детали ошибки перевода", "Tõlke vea üksikasjad", "Translation error details"],
+  "translationPleaseWait": ["Загрузка может занять несколько минут. Дождись завершения: повторное нажатие не ускоряет её.", "Laadimine võib võtta mõne minuti. Oota lõpuni; uuesti vajutamine ei kiirenda seda.", "Downloads may take a few minutes. Wait for completion; another tap will not speed them up."],
   "translationAccuracy": ["Автоматический перевод может содержать неточности. Для проверки открой оригинал.", "Automaattõlkes võib olla ebatäpsusi. Kontrollimiseks ava originaal.", "Automatic translation may contain inaccuracies. Check the original when needed."],
   "showTranslation": ["Показать перевод", "Näita tõlget", "Show translation"],
   "showOriginal": ["Показать оригинал", "Näita originaali", "Show original"],

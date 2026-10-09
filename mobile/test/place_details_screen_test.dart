@@ -64,23 +64,35 @@ void main() {
     expect(translator.calls.length, 1); expect(service.calls.length, 1);
     expect(tester.takeException(), isNull);
   });
-  testWidgets('Translation failure keeps the original and mobile-data retry ignores the older result', (tester) async {
+  testWidgets('Cellular retry works, keeps its permission, and disables duplicate taps while loading', (tester) async {
     final service = DeferredDetailsService();
     final translator = DeferredTranslator();
     await tester.pumpWidget(MaterialApp(home: PlaceDetailsScreen(
       place: routePlaces.first, demo: false, service: service, translator: translator)));
     service.calls.single.result.complete(source); await tester.pump();
+    translator.calls.first.result.completeError(const PlaceTranslationException(TranslationProblem.wifiRequired));
+    await tester.pumpAndSettle();
+    expect(find.text('Для загрузки языковых пакетов подключи Wi-Fi или разреши мобильный интернет кнопкой ниже.'), findsOneWidget);
     final mobile = find.byKey(const ValueKey('translation-mobile-data'));
-    await tester.ensureVisible(mobile); await tester.tap(mobile); await tester.pump();
+    await Scrollable.ensureVisible(tester.element(mobile), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(mobile.hitTestable(), findsOneWidget);
+    await tester.tap(mobile); await tester.pump();
     expect(translator.calls.last.mobile, isTrue);
+    expect(tester.widget<TextButton>(mobile).onPressed, isNull);
+    await tester.tap(mobile); await tester.pump();
+    expect(translator.calls.length, 2);
     translator.calls.last.result.completeError(StateError('Model unavailable'));
     await tester.pumpAndSettle();
     expect(find.text('Avatud 1928. aastal.'), findsOneWidget);
     expect(find.byKey(const ValueKey('retry-translation')), findsOneWidget);
-    translator.calls.first.result.complete(translated); await tester.pumpAndSettle();
-    expect(find.text('Открыт в 1928 году.'), findsNothing);
+    expect(find.byKey(const ValueKey('translation-diagnostic')), findsOneWidget);
     final retry = find.byKey(const ValueKey('retry-translation'));
-    await tester.ensureVisible(retry); await tester.tap(retry); await tester.pump();
+    await Scrollable.ensureVisible(tester.element(retry), alignment: 0.5);
+    await tester.pumpAndSettle();
+    expect(retry.hitTestable(), findsOneWidget);
+    await tester.tap(retry); await tester.pump();
+    expect(translator.calls.last.mobile, isTrue);
     translator.calls.last.result.complete(translated); await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('retry-translation')), findsNothing);
     expect(tester.takeException(), isNull);

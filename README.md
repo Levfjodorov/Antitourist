@@ -40,7 +40,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
   -d '{"lat":59.437,"lon":24.7536,"duration_minutes":120,"mode":"walking","interests":["history","weird","views"]}'
 ```
 
-## Android 0.5.6
+## Android 0.5.7
+
+Version 0.5.7 checks Wi-Fi before scheduling a model download, so cellular
+retries cannot inherit a queued Wi-Fi-only task. Downloads have a five-minute
+limit per model, duplicate taps are disabled, and retries retain explicit mobile
+data permission for the open card. Errors show a specific reason and expandable
+native diagnostics. A separate release-mode Android emulator job downloads
+real models and requires Russian output for an Estonian monument description.
 
 Version 0.5.6 translates linked article introductions, section headings and text
 into the selected app language with Google Translate on-device models (ML Kit).
@@ -89,8 +96,8 @@ See [Android build and release instructions (Russian)](docs/ANDROID.md).
 - Windows: `Build-APK.cmd` (Python 3.10+, Flutter 3.47.6, Java 17, Android SDK).
 - Linux/macOS: `python3 scripts/build_android.py`.
 - GitHub Actions: `Build Android APK` runs on PRs and pushes to `main`, and supports manual runs.
-- Test output: `dist/AntiTourist-0.5.6-test.apk`, checksums and build metadata.
-- Release output: `dist/AntiTourist-0.5.6-release.apk`, using a permanent keystore.
+- Test output: `dist/AntiTourist-0.5.7-test.apk`, checksums and build metadata.
+- Release output: `dist/AntiTourist-0.5.7-release.apk`, using a permanent keystore.
 
 The build pins Flutter in `.flutter-version`, enforces `mobile/pubspec.lock`,
 runs analysis and tests before compiling, then verifies the APK signature,

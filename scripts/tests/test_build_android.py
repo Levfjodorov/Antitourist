@@ -37,6 +37,7 @@ BADGING = '''package: name='com.antitourist.antitourist' versionCode='9' version
 sdkVersion:'24'
 targetSdkVersion:'36'
 uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
 uses-permission: name='android.permission.ACCESS_COARSE_LOCATION'
 uses-permission: name='android.permission.ACCESS_FINE_LOCATION'
 '''
@@ -57,7 +58,7 @@ class BuildTests(unittest.TestCase):
         root = ET.parse(path).getroot()
         permissions = [p.get(ANDROID + 'name') for p in root.findall('uses-permission')]
         self.assertCountEqual(permissions, ['android.permission.' + p for p in
-            ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']])
+            ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']])
         app = root.find('application')
         self.assertEqual(app.get(ANDROID + 'name'), '${applicationName}')
         self.assertEqual(app.get(ANDROID + 'label'), 'AntiTourist')
@@ -195,6 +196,9 @@ class BuildTests(unittest.TestCase):
                 builder.android_tool('apksigner')
 
     def test_pipeline_refreshes_sources_runs_checks_before_build_and_copies_artifacts(self):
+        native = self.root / 'mobile' / 'android' / 'MainActivity.kt'
+        native.parent.mkdir(parents=True)
+        native.write_text('translation network channel fixture')
         for folder in ['lib', 'assets', 'test']:
             path = self.root / 'mobile' / folder
             path.mkdir(parents=True)
@@ -211,6 +215,9 @@ class BuildTests(unittest.TestCase):
                 manifest.parent.mkdir(parents=True)
                 manifest.write_text(MANIFEST)
                 (build / 'android' / 'app' / 'build.gradle.kts').write_text(KOTLIN)
+                activity = build / 'android' / 'app' / 'src' / 'main' / 'kotlin' / 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt'
+                activity.parent.mkdir(parents=True)
+                activity.write_text('generated activity fixture')
                 (build / 'test').mkdir()
                 (build / 'test' / 'widget_test.dart').write_text('stale template test')
             if arguments[:2] == ['pub', 'get']:
@@ -231,6 +238,8 @@ class BuildTests(unittest.TestCase):
         build = self.root / 'build' / 'android-project'
         self.assertFalse((build / 'test' / 'widget_test.dart').exists())
         self.assertTrue((build / 'test' / 'new.txt').is_file())
+        activity = build / 'android' / 'app' / 'src' / 'main' / 'kotlin' / 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt'
+        self.assertEqual(activity.read_text(), native.read_text())
         self.assertEqual(calls[1:], [
             ['pub', 'get', '--enforce-lockfile'], ['pub', 'run', 'flutter_launcher_icons'],
             ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded', '--dart-define=ANTITOURIST_VERSION=0.8.7'], ['build', 'apk', '--release', '--no-pub', '--dart-define=ANTITOURIST_VERSION=0.8.7'],

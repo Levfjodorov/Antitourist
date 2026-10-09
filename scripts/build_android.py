@@ -60,7 +60,7 @@ def patch_manifest(path: Path) -> None:
     tree = ET.parse(path)
     root = tree.getroot()
     name = '{' + namespace + '}name'
-    permissions = ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']
+    permissions = ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']
     existing = {p.get(name) for p in root.findall('uses-permission')}
     for permission in permissions:
         full_name = 'android.permission.' + permission
@@ -190,7 +190,7 @@ def verify_apk(apk: Path, pubspec: Path, certificate: str | None) -> dict:
         raise RuntimeError('APK identity, version, minimum SDK, or release build mode is incorrect')
     permissions = re.findall(r"^uses-permission: name='([^']+)'", badging, re.MULTILINE)
     required = {'android.permission.' + p for p in
-                ['INTERNET', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']}
+                ['INTERNET', 'ACCESS_NETWORK_STATE', 'ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION']}
     if not required.issubset(permissions):
         raise RuntimeError('APK is missing required internet/location permissions')
     return {'application_id': package.group(1), 'version_name': version, 'version_code': code,
@@ -237,6 +237,9 @@ def main() -> int:
         shutil.copytree(ROOT / 'mobile' / folder, target)
     shutil.copy2(pubspec, build / 'pubspec.yaml')
     shutil.copy2(lockfile, build / 'pubspec.lock')
+    activity = ROOT / 'mobile' / 'android' / 'MainActivity.kt'
+    shutil.copy2(activity, build / 'android' / 'app' / 'src' / 'main' / 'kotlin' /
+                 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt')
     patch_manifest(build / 'android' / 'app' / 'src' / 'main' / 'AndroidManifest.xml')
     patch_min_sdk(build / 'android' / 'app')
     patch_signing(build / 'android' / 'app', args.release_signing)
