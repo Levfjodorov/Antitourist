@@ -145,6 +145,24 @@ class BuildTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unrecognized signing template'):
             builder.patch_signing(self.root, True)
 
+    def test_mlkit_keep_rules_apply_to_both_templates_and_survive_signing_changes(self):
+        for filename, text in [('build.gradle.kts', KOTLIN), ('build.gradle', GROOVY)]:
+            app = self.root / filename.replace('.', '-')
+            app.mkdir()
+            path = app / filename
+            path.write_text(text)
+            builder.patch_keep_rules(app)
+            first = path.read_text()
+            builder.patch_keep_rules(app)
+            self.assertEqual(path.read_text(), first)
+            self.assertEqual(first.count('proguard-rules.pro'), 1)
+            builder.patch_signing(app, True)
+            builder.patch_signing(app, False)
+            self.assertEqual(path.read_text(), first)
+        (self.root / 'build.gradle.kts').write_text('android {}')
+        with self.assertRaisesRegex(RuntimeError, 'cannot add ML Kit keep rules'):
+            builder.patch_keep_rules(self.root)
+
     def test_apk_signer_and_packaged_manifest_must_match_requested_release(self):
         pubspec = self.root / 'pubspec.yaml'
         pubspec.write_text('version: 0.5.1+9\n')
@@ -199,6 +217,7 @@ class BuildTests(unittest.TestCase):
         native = self.root / 'mobile' / 'android' / 'MainActivity.kt'
         native.parent.mkdir(parents=True)
         native.write_text('translation network channel fixture')
+        (native.parent / 'proguard-rules.pro').write_text('keep registrar fixture')
         for folder in ['lib', 'assets', 'test']:
             path = self.root / 'mobile' / folder
             path.mkdir(parents=True)
@@ -240,6 +259,8 @@ class BuildTests(unittest.TestCase):
         self.assertTrue((build / 'test' / 'new.txt').is_file())
         activity = build / 'android' / 'app' / 'src' / 'main' / 'kotlin' / 'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt'
         self.assertEqual(activity.read_text(), native.read_text())
+        self.assertEqual((build / 'android' / 'app' / 'proguard-rules.pro').read_text(), 'keep registrar fixture')
+        self.assertIn('proguard-rules.pro', (build / 'android' / 'app' / 'build.gradle.kts').read_text())
         self.assertEqual(calls[1:], [
             ['pub', 'get', '--enforce-lockfile'], ['pub', 'run', 'flutter_launcher_icons'],
             ['analyze', '--no-pub'], ['test', '--no-pub', '--reporter', 'expanded', '--dart-define=ANTITOURIST_VERSION=0.8.7'], ['build', 'apk', '--release', '--no-pub', '--dart-define=ANTITOURIST_VERSION=0.8.7'],

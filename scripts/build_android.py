@@ -138,6 +138,27 @@ def patch_signing(app: Path, release: bool) -> None:
     path.write_text(text, encoding='utf-8')
 
 
+def patch_keep_rules(app: Path) -> None:
+    """Keep reflection-based ML Kit registration in optimized release APKs."""
+    kotlin = app / 'build.gradle.kts'
+    groovy = app / 'build.gradle'
+    if kotlin.is_file():
+        path = kotlin
+        rule = '            proguardFiles("proguard-rules.pro")\n'
+    elif groovy.is_file():
+        path = groovy
+        rule = "            proguardFiles 'proguard-rules.pro'\n"
+    else:
+        raise RuntimeError('Generated Android project has no Gradle app configuration')
+    text = path.read_text(encoding='utf-8')
+    anchor = '        release {\n'
+    if rule not in text:
+        if text.count(anchor) != 1:
+            raise RuntimeError('Unrecognized release template; cannot add ML Kit keep rules')
+        text = text.replace(anchor, anchor + rule)
+    path.write_text(text, encoding='utf-8')
+
+
 def app_version(pubspec: Path) -> tuple[str, int]:
     match = re.search(r'^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$',
                       pubspec.read_text(encoding='utf-8'), re.MULTILINE)
@@ -240,8 +261,11 @@ def main() -> int:
     activity = ROOT / 'mobile' / 'android' / 'MainActivity.kt'
     shutil.copy2(activity, build / 'android' / 'app' / 'src' / 'main' / 'kotlin' /
                  'com' / 'antitourist' / 'antitourist' / 'MainActivity.kt')
+    shutil.copy2(ROOT / 'mobile' / 'android' / 'proguard-rules.pro',
+                 build / 'android' / 'app' / 'proguard-rules.pro')
     patch_manifest(build / 'android' / 'app' / 'src' / 'main' / 'AndroidManifest.xml')
     patch_min_sdk(build / 'android' / 'app')
+    patch_keep_rules(build / 'android' / 'app')
     patch_signing(build / 'android' / 'app', args.release_signing)
     if args.prepare_only:
         print('Prepared: ' + str(build))

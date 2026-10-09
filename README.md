@@ -42,7 +42,11 @@ curl -X POST http://127.0.0.1:8000/api/v1/routes/surprise \
 
 ## Android 0.5.7
 
-Version 0.5.7 checks Wi-Fi before scheduling a model download, so cellular
+Version 0.5.7 keeps reflection-based ML Kit registrar names and constructors in
+optimized APKs. Without these rules R8 removed constructors: the translation
+plugin failed to register and every translation button raised MissingPluginException.
+
+It also checks Wi-Fi before scheduling a model download, so initial cellular
 retries cannot inherit a queued Wi-Fi-only task. Downloads have a five-minute
 limit per model, duplicate taps are disabled, and retries retain explicit mobile
 data permission for the open card. Errors show a specific reason and expandable
