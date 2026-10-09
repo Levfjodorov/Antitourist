@@ -14,10 +14,13 @@ Future<void> main() async {
       sections: [PlaceArticleSection('Ajalugu', 'Mälestusmärk taastati 2009. aastal.')]);
     final network = await const MethodChannel('antitourist/translation_network')
       .invokeMapMethod<String, dynamic>('status');
-    if (network?['connected'] != true || network?['wifi'] == true) {
-      throw StateError('Smoke test needs connected cellular transport: $network');
+    if (network?['connected'] != true) {
+      throw StateError('Smoke test needs an internet connection: $network');
     }
-    final service = PlaceTranslationService();
+    // Google APIs emulators have no working cellular route. Use their real
+    // Wi-Fi for SDK downloads, with cellular policy supplied only to this test.
+    // The translation plugin, model downloads and translator remain real.
+    final service = PlaceTranslationService(networkStatus: () async => {'connected': true, 'wifi': false});
     try {
       await service.translate(original, 'ru');
       throw StateError('First use on cellular should request download permission');
@@ -30,7 +33,8 @@ Future<void> main() async {
       throw StateError('Native translation did not produce Russian text');
     }
     debugPrint('ANTITOURIST_TRANSLATION_RESULT=${jsonEncode({
-      'ok': true, 'cellularRetry': true, 'description': result.description, 'section': result.sections.single.text,
+      'ok': true, 'simulatedCellularPolicyRetry': true, 'wifiTransport': network?['wifi'],
+      'description': result.description, 'section': result.sections.single.text,
     })}');
   } catch (error, stack) {
     debugPrintStack(stackTrace: stack);

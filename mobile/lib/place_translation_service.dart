@@ -26,10 +26,15 @@ class PlaceTranslationException implements Exception {
 }
 
 class PlaceTranslationService implements PlaceTextTranslator {
-  PlaceTranslationService({this.modelTimeout = const Duration(minutes: 5)});
+  PlaceTranslationService({this.modelTimeout = const Duration(minutes: 5),
+    Future<Map<String, dynamic>?> Function()? networkStatus})
+    : _networkStatus = networkStatus ?? _readNetworkStatus;
   static final shared = PlaceTranslationService();
   static const _network = MethodChannel('antitourist/translation_network');
   final Duration modelTimeout;
+  final Future<Map<String, dynamic>?> Function() _networkStatus;
+  static Future<Map<String, dynamic>?> _readNetworkStatus() =>
+    _network.invokeMapMethod<String, dynamic>('status');
   final _cache = <String, TranslatedPlaceText>{};
   final _pending = <String, Future<TranslatedPlaceText>>{};
 
@@ -66,8 +71,7 @@ class PlaceTranslationService implements PlaceTextTranslator {
       for (final language in {source, target}.where((value) => value != TranslateLanguage.english)) {
         stage = 'model ${language.bcpCode}';
         if (!await models.isModelDownloaded(language.bcpCode).timeout(const Duration(seconds: 15))) {
-          final status = await _network.invokeMapMethod<String, dynamic>('status')
-            .timeout(const Duration(seconds: 15));
+          final status = await _networkStatus().timeout(const Duration(seconds: 15));
           if (status?['connected'] != true) {
             throw const PlaceTranslationException(TranslationProblem.offline);
           }

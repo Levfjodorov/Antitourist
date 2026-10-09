@@ -10,7 +10,7 @@ marker = 'ANTITOURIST_TRANSLATION_RESULT='
 apk = Path(sys.argv[1]).resolve()
 subprocess.run(['adb', 'install', '-r', str(apk)], check=True)
 subprocess.run(['adb', 'logcat', '-c'], check=True)
-subprocess.run(['adb', 'shell', 'svc', 'wifi', 'disable'], check=True)
+subprocess.run(['adb', 'shell', 'svc', 'wifi', 'enable'], check=True)
 subprocess.run(['adb', 'shell', 'svc', 'data', 'enable'], check=True)
 time.sleep(3)
 subprocess.run(['adb', 'shell', 'am', 'start', '-n', package + '/.MainActivity'], check=True)
