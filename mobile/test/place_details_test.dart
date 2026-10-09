@@ -10,7 +10,7 @@ import 'package:http/testing.dart';
 Place linkedPlace(Map<String, String> tags) => Place(id: 'node/12', name: 'Place',
   category: 'history', lat: 59.437, lon: 24.75, description: 'OSM', score: 70,
   legalAccess: true, tags: tags, osmUrl: Uri.parse('https://www.openstreetmap.org/node/12'));
-Map<String, dynamic> photoFixture({String url = 'https://upload.wikimedia.org/example.jpg',
+Map<String, dynamic> photoFixture({String url = 'https://thumb.wikimedia.org/example.jpg',
   bool credit = true}) => {'query': {'pages': [{'imageinfo': [{
     'thumburl': url, 'descriptionurl': 'https://commons.wikimedia.org/wiki/File:Place.jpg',
     'mime': 'image/jpeg', 'extmetadata': {
@@ -220,6 +220,8 @@ void main() {
     (withoutAuthor['query']['pages'][0]['imageinfo'][0]['extmetadata'] as Map)['Credit'] = {'value': 'Own work'};
     expect(parseCommonsPhoto(withoutAuthor), isNull);
     expect(parseCommonsPhoto(photoFixture(url: 'https://unrelated.example/photo.jpg')), isNull);
+    expect(parseCommonsPhoto(photoFixture(url: 'https://upload.wikimedia.org/example.jpg')), isNotNull);
+    expect(parseCommonsPhoto(photoFixture(url: 'https://thumb.wikimedia.org.unrelated.example/photo.jpg')), isNull);
     final attribution = photoFixture();
     (attribution['query']['pages'][0]['imageinfo'][0]['extmetadata'] as Map)['Attribution'] = {'value': 'Required &amp; custom credit'};
     expect(parseCommonsPhoto(attribution)!.credit, 'Required & custom credit');

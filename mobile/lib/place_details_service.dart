@@ -143,7 +143,8 @@ PlacePhoto? parseCommonsPhoto(Map<String, dynamic> data) {
   final credit = attribution.isNotEmpty ? attribution
     : [field('Artist'), field('Credit')].where((s) => s.isNotEmpty).join(' · ');
   final license = field('LicenseShortName');
-  if (url == null || source == null || url.host != 'upload.wikimedia.org' || source.host != 'commons.wikimedia.org' ||
+  if (url == null || source == null || !{'upload.wikimedia.org', 'thumb.wikimedia.org'}.contains(url.host) ||
+      source.host != 'commons.wikimedia.org' ||
       !['image/jpeg', 'image/png', 'image/webp'].contains(info['thumbmime'] ?? info['mime']) ||
       (field('Artist').isEmpty && attribution.isEmpty) || credit.isEmpty || license.isEmpty) { return null; }
   return PlacePhoto(url: url, source: source, credit: credit, license: license,
@@ -262,7 +263,7 @@ class PlaceDetailsService {
       final uri = safeWebUrl(image);
       if (uri != null && uri.host == 'commons.wikimedia.org' && uri.path.startsWith('/wiki/File:')) {
         filename = Uri.decodeComponent(uri.path.substring('/wiki/File:'.length));
-      } else if (uri != null && uri.host == 'upload.wikimedia.org' &&
+      } else if (uri != null && {'upload.wikimedia.org', 'thumb.wikimedia.org'}.contains(uri.host) &&
           uri.path.startsWith('/wikipedia/commons/')) {
         final pieces = uri.pathSegments;
         if (pieces.length >= 5) { filename = pieces[2] == 'thumb' ? pieces[pieces.length - 2] : pieces.last; }

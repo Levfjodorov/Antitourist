@@ -56,6 +56,8 @@ translation remains available. Nearby Commons photos retain their separate 150 m
 label. Coverage is limited to available Wikimedia material, not all websites.
 Google Places Photos would require a separately configured API key and billing;
 Google images and arbitrary website content are not scraped by this build.
+Commons photos accept both official media hosts, including the new
+`thumb.wikimedia.org` thumbnail domain, while retaining source and credit checks.
 
 ## Android 0.5.7
 
