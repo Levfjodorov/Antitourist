@@ -21,7 +21,11 @@ class MyPlacesScreen extends StatelessWidget {
       content: Text(tr(context, 'deleteWalkHint')),
       actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr(context, 'cancel'))),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr(context, 'delete')))]));
-    if (accepted == true && context.mounted) { await AppStoreScope.of(context)!.remove(walk.id); }
+    if (accepted == true && context.mounted) {
+      final offline = OfflineScope.of(context);
+      final success = await AppStoreScope.of(context)!.remove(walk.id);
+      if (success && offline != null) { await offline.remove(walk.id); }
+    }
   }
   Widget _walks(BuildContext context, List<SavedWalk> walks, String empty) => ListView(
     padding: const EdgeInsets.all(20), children: [
@@ -42,9 +46,10 @@ class MyPlacesScreen extends StatelessWidget {
           Wrap(spacing: 8, children: [
             FilledButton(onPressed: () => openSavedWalk(context, walk),
               child: Text(tr(context, walk.complete ? 'walkResult' : 'openSavedWalk'))),
-            TextButton(onPressed: () => _delete(context, walk), child: Text(tr(context, 'delete'))),
+            TextButton(onPressed: OfflineScope.of(context)?.busy == true ? null : () => _delete(context, walk),
+              child: Text(tr(context, 'delete'))),
             if (walk.session != null && OfflineScope.of(context)?.streets(walk.session!.route) != null)
-              TextButton(onPressed: () async {
+              TextButton(onPressed: OfflineScope.of(context)?.busy == true ? null : () async {
                 final ok = await OfflineScope.of(context)!.remove(walk.id);
                 if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, ok ? 'offlineRemoved' : 'dataSaveError')))); }
               }, child: Text(tr(context, 'removeOffline'))),

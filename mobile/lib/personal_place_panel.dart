@@ -21,12 +21,13 @@ class _PersonalPlacePanelState extends State<PersonalPlacePanel> {
   }
   @override
   void dispose() { note.dispose(); super.dispose(); }
-  Future<void> _run(Future<bool> Function() operation, {bool photo = false}) async {
+  Future<void> _run(Future<bool?> Function() operation, {bool photo = false}) async {
     setState(() => busy = true);
-    var success = false;
+    bool? success = false;
     try { success = await operation(); } catch (_) { /* Show a localized recoverable failure. */ }
     if (!mounted) { return; }
     setState(() => busy = false);
+    if (success == null) { return; }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context,
       success ? 'personalSaved' : photo ? 'personalPhotoError' : 'dataSaveError'))));
   }

@@ -14,7 +14,7 @@ class PlaceMemory {
   final Map<String, DateTime> walkVisits;
   bool get visited => manualVisit != null || walkVisits.isNotEmpty;
   DateTime? get lastVisit {
-    final dates = [if (manualVisit != null) manualVisit!, ...walkVisits.values]..sort();
+    final dates = [?manualVisit, ...walkVisits.values]..sort();
     return dates.isEmpty ? null : dates.last;
   }
   bool get hasContent => note.isNotEmpty || photos.isNotEmpty;

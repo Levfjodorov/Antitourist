@@ -41,7 +41,7 @@ class PersonalPhotos {
     await temporary.rename(target.path);
     return name;
   }
-  Future<bool> pick(AppStore store, Place place, ImageSource source) async {
+  Future<bool?> pick(AppStore store, Place place, ImageSource source) async {
     if ((store.memory(place)?.photos.length ?? 0) >= 20 || directory == null) {
       throw const FileSystemException('Cannot add another photo');
     }
@@ -49,7 +49,7 @@ class PersonalPhotos {
     try {
       final picked = await picker.pickImage(source: source, maxWidth: 2048,
         maxHeight: 2048, imageQuality: 85, requestFullMetadata: false);
-      if (picked == null) { return await store.cancelPhoto(); }
+      if (picked == null) { return await store.cancelPhoto() ? null : false; }
       final name = await importPhoto(picked);
       return await store.finishPhoto(name);
     } catch (_) { await store.cancelPhoto(); rethrow; }

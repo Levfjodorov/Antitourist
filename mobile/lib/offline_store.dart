@@ -91,6 +91,7 @@ class OfflineStore extends ChangeNotifier {
   }
   List<OfflineStreet>? streets(WalkingRoute route) => _maps[routeFingerprint(route)];
   bool ready(String? id, WalkingRoute route, String language) {
+    if (saveFailed) { return false; }
     final manifest = _walks[id];
     return manifest?['route'] == routeFingerprint(route) && manifest?['language'] == language &&
       manifest?['complete'] == true && streets(route)?.isNotEmpty == true &&
@@ -257,12 +258,14 @@ class OfflineStore extends ChangeNotifier {
         if (p['file'] is String) { used.add(p['file'] as String); }
       }
     }
-    if (directory != null) {
-      await for (final entity in directory!.list()) {
-        final name = entity.uri.pathSegments.last;
-        if (entity is File && photoFile(name) != null && !used.contains(name)) { await entity.delete(); }
+    try {
+      if (directory != null) {
+        await for (final entity in directory!.list()) {
+          final name = entity.uri.pathSegments.last;
+          if (entity is File && photoFile(name) != null && !used.contains(name)) { await entity.delete(); }
+        }
       }
-    }
+    } catch (_) { saveFailed = true; notifyListeners(); return false; }
     return true;
   }
 }
